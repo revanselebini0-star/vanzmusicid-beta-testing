@@ -54,6 +54,6 @@ export interface UserProfile {
   photoURL: string | null;
 }
 
-export type ViewTab = 'listen_now' | 'library' | 'search' | 'recommendations' | 'radio';
+export type ViewTab = 'listen_now' | 'library' | 'search' | 'recommendations' | 'radio' | 'account';
 
 export type RepeatMode = 'off' | 'all' | 'one';

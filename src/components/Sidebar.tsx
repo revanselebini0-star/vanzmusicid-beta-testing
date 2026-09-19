@@ -30,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     { id: 'search' as ViewTab, label: 'Cari', icon: Search },
     { id: 'listen_now' as ViewTab, label: 'Beranda', icon: Home },
     { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: Sparkles },
+    { id: 'account' as ViewTab, label: 'Akun', icon: UserIcon },
   ];
 
   return (

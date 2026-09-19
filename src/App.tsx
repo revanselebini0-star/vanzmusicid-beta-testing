@@ -9,6 +9,7 @@ import { ListenNowView } from './components/views/ListenNowView';
 import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
 import { LibraryView } from './components/views/LibraryView';
+import { AccountView } from './components/views/AccountView';
 import { Track } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -54,8 +55,8 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <main className="flex-1 px-6 sm:px-10 py-8 min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto pb-24 sm:pb-8">
+        <main className="flex-1 px-4 sm:px-10 py-6 sm:py-8 min-w-0">
           <AnimatePresence mode="wait">
             {activeTab === 'search' && (
               <motion.div
@@ -105,6 +106,18 @@ const AppContent: React.FC = () => {
                   onCreatePlaylistClick={() => handleOpenPlaylistModal()}
                   onOpenPlaylistModal={handleOpenPlaylistModal} 
                 />
+              </motion.div>
+            )}
+
+            {activeTab === 'account' && (
+              <motion.div
+                key="account"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <AccountView />
               </motion.div>
             )}
           </AnimatePresence>
