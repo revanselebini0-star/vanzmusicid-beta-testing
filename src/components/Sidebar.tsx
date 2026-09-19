@@ -33,7 +33,8 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   ];
 
   return (
-    <aside className="w-56 shrink-0 h-screen bg-[#1c1c1e] text-neutral-300 flex flex-col justify-between p-4 select-none border-r border-white/5 font-sans z-20">
+    /* PERUBAHAN DI SINI: Ditambahkan class 'hidden md:flex' dan mengubah 'flex' bawaan menjadi 'md:flex' */
+    <aside className="hidden md:flex w-56 shrink-0 h-screen bg-[#1c1c1e] text-neutral-300 flex-col justify-between p-4 select-none border-r border-white/5 font-sans z-20">
       {/* Top Section: Logo & Nav items */}
       <div className="space-y-6">
         {/* Brand Header: Music icon + Music (No Apple Logo) */}
