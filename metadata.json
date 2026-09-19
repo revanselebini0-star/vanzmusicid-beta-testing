@@ -1,0 +1,6 @@
+{
+  "name": "vanz music (beta testing)",
+  "description": "Aplikasi streaming musik modern dengan YouTube trending, sinkronisasi lirik asli, IndexedDB offline, dan Google Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
