@@ -277,6 +277,44 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Background play & WakeLock / Visibility change handling
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      if (isPlaying && 'wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    if (isPlaying) {
+      requestWakeLock();
+    }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isPlaying && ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.playVideo?.();
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [isPlaying]);
+
   // MediaSession API setup for Background & Lock Screen Control
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
