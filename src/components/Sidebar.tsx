@@ -8,7 +8,8 @@ import {
   LogIn, 
   LogOut,
   User as UserIcon,
-  Music2
+  Music2,
+  Mail
 } from 'lucide-react';
 import { ViewTab } from '../types';
 
@@ -27,9 +28,10 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   } = usePlayer();
 
   const navItems = [
-    { id: 'search' as ViewTab, label: 'Cari', icon: Search },
     { id: 'listen_now' as ViewTab, label: 'Beranda', icon: Home },
+    { id: 'search' as ViewTab, label: 'Cari', icon: Search },
     { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: Sparkles },
+    { id: 'email' as ViewTab, label: 'Email', icon: Mail },
     { id: 'account' as ViewTab, label: 'Akun', icon: UserIcon },
   ];
 
@@ -46,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
             <Music2 className="w-4 h-4 fill-current" />
           </div>
           <span className="font-bold text-xl tracking-tight text-white group-hover:text-[var(--theme-accent)] transition-colors">
-            Vanz Music
+            Music
           </span>
         </div>
 

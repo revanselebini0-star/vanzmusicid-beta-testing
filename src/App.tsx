@@ -10,6 +10,7 @@ import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
 import { LibraryView } from './components/views/LibraryView';
 import { AccountView } from './components/views/AccountView';
+import { EmailView } from './components/views/EmailView';
 import { Track } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -106,6 +107,18 @@ const AppContent: React.FC = () => {
                   onCreatePlaylistClick={() => handleOpenPlaylistModal()}
                   onOpenPlaylistModal={handleOpenPlaylistModal} 
                 />
+              </motion.div>
+            )}
+
+            {activeTab === 'email' && (
+              <motion.div
+                key="email"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <EmailView />
               </motion.div>
             )}
 

@@ -42,10 +42,10 @@ export const MiniPlayer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-[64px] sm:bottom-3 left-1/2 -translate-x-1/2 z-40 w-[94vw] sm:w-auto max-w-md sm:max-w-none pointer-events-auto">
+    <div className="fixed bottom-[calc(max(env(safe-area-inset-bottom),12px)+68px)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95vw] sm:w-auto max-w-md lg:max-w-none pointer-events-auto">
       <div 
         id="dock-player-bar"
-        className="bg-[#242426]/95 backdrop-blur-2xl border border-white/10 rounded-2xl sm:rounded-full px-3 sm:px-4 py-2 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-4 text-neutral-300 select-none transition-all"
+        className="bg-[#242426]/95 backdrop-blur-2xl border border-white/10 rounded-2xl sm:rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-4 text-neutral-300 select-none transition-all ring-1 ring-black/40"
       >
         {/* Shuffle Button (Hidden on small mobile) */}
         <button

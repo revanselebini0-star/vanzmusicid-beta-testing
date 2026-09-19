@@ -179,9 +179,9 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
         </header>
 
         {/* Main Content Area: Artwork, Lyrics, or Video */}
-        <div className="relative z-10 flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-14 py-4 gap-8 min-h-0 overflow-hidden">
+        <div className="relative z-10 flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-14 py-2 sm:py-4 gap-4 sm:gap-8 min-h-0 overflow-hidden">
           {/* Visual Canvas (Artwork or YouTube Video Frame) */}
-          <div className={`w-full max-w-sm md:max-w-md aspect-square flex items-center justify-center transition-all duration-300 ${
+          <div className={`w-full max-w-[260px] sm:max-w-sm md:max-w-md max-h-[38vh] sm:max-h-none aspect-square flex items-center justify-center transition-all duration-300 ${
             isLyricsOpen ? 'hidden md:flex md:w-1/2 md:max-w-xs' : 'flex'
           }`}>
             {isVideoMode ? (
@@ -333,7 +333,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
         </div>
 
         {/* Bottom Playback Controls */}
-        <div className="relative z-10 px-6 md:px-14 pb-8 max-w-2xl mx-auto w-full">
+        <div className="relative z-10 px-6 md:px-14 pb-[max(env(safe-area-inset-bottom),1.75rem)] pt-1 max-w-2xl mx-auto w-full">
           {/* Song Meta (Title & Artist) + Actions */}
           <div className="flex items-center justify-between mb-4">
             <div className="min-w-0 flex-1 mr-4">

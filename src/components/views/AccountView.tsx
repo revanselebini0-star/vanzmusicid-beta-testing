@@ -27,7 +27,7 @@ export const AccountView: React.FC = () => {
                 className="w-14 h-14 rounded-full object-cover"
               />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-[#fa2d48] flex items-center justify-center text-white text-lg font-bold">
+              <div className="w-14 h-14 rounded-full bg-[var(--theme-accent)] flex items-center justify-center text-white text-lg font-bold">
                 {user.displayName?.[0] || user.email?.[0] || 'U'}
               </div>
             )}
@@ -35,7 +35,7 @@ export const AccountView: React.FC = () => {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <h2 className="text-base font-semibold text-white truncate">{user.displayName || 'Pengguna'}</h2>
-                <CheckCircle2 className="w-4 h-4 text-[#fa2d48] shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)] shrink-0" />
               </div>
               <p className="text-sm text-neutral-400 truncate">{user.email}</p>
             </div>

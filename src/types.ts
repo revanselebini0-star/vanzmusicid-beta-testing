@@ -54,6 +54,17 @@ export interface UserProfile {
   photoURL: string | null;
 }
 
-export type ViewTab = 'listen_now' | 'library' | 'search' | 'recommendations' | 'radio' | 'account';
+export interface AdminMessage {
+  id: string;
+  title: string;
+  content: string;
+  imageUrl?: string;
+  tag?: 'Update' | 'Fitur Baru' | 'Musik' | 'Pengumuman' | 'Penting';
+  createdAt: number;
+  authorName?: string;
+  authorEmail?: string;
+}
+
+export type ViewTab = 'listen_now' | 'library' | 'search' | 'recommendations' | 'radio' | 'account' | 'email';
 
 export type RepeatMode = 'off' | 'all' | 'one';
