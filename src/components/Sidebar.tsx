@@ -46,7 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
             <Music2 className="w-4 h-4 fill-current" />
           </div>
           <span className="font-bold text-xl tracking-tight text-white group-hover:text-[#fa2d48] transition-colors">
-            Music
+            Vanz Music
           </span>
         </div>
 
