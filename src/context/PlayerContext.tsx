@@ -78,6 +78,10 @@ interface PlayerContextType {
 
   // Player Container Ref for embedded YouTube iframe
   ytContainerId: string;
+
+  // Dynamic Theme Color based on track
+  themeColor: string;
+  themeGlow: string;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -88,6 +92,27 @@ declare global {
     onYouTubeIframeAPIReady: () => void;
   }
 }
+
+const TRACK_THEME_PALETTES = [
+  { name: 'pink', color: '#fa2d48', glow: 'rgba(250, 45, 72, 0.4)' },
+  { name: 'purple', color: '#af52de', glow: 'rgba(175, 82, 222, 0.4)' },
+  { name: 'blue', color: '#007aff', glow: 'rgba(0, 122, 255, 0.4)' },
+  { name: 'green', color: '#34c759', glow: 'rgba(52, 199, 89, 0.4)' },
+  { name: 'orange', color: '#ff9500', glow: 'rgba(255, 149, 0, 0.4)' },
+  { name: 'indigo', color: '#5856d6', glow: 'rgba(88, 86, 214, 0.4)' },
+  { name: 'cyan', color: '#32ade6', glow: 'rgba(50, 173, 230, 0.4)' },
+];
+
+const getThemePalette = (track: Track | null) => {
+  if (!track) return TRACK_THEME_PALETTES[0];
+  let hash = 0;
+  const str = track.id + track.title + (track.artist || '');
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % TRACK_THEME_PALETTES.length;
+  return TRACK_THEME_PALETTES[index];
+};
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -128,16 +153,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ytContainerId = 'vanz-yt-player';
   const progressTimerRef = useRef<any>(null);
 
-  // Initialize Theme class
+  // Dynamic Theme Color based on track
+  const [currentPalette, setCurrentPalette] = useState(TRACK_THEME_PALETTES[0]);
+
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('vanz_music_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('vanz_music_theme', 'light');
-    }
-  }, [isDarkMode]);
+    const palette = getThemePalette(currentTrack);
+    setCurrentPalette(palette);
+    document.documentElement.style.setProperty('--theme-accent', palette.color);
+    document.documentElement.style.setProperty('--theme-glow', palette.glow);
+  }, [currentTrack]);
 
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);
 
@@ -669,7 +693,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signInWithGoogleAction,
         signOutAction,
 
-        ytContainerId
+        ytContainerId,
+
+        themeColor: currentPalette.color,
+        themeGlow: currentPalette.glow
       }}
     >
       {children}

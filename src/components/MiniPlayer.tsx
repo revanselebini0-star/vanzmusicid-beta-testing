@@ -51,7 +51,7 @@ export const MiniPlayer: React.FC = () => {
         <button
           onClick={toggleShuffle}
           className={`hidden md:flex p-1.5 rounded-full hover:text-white transition-colors ${
-            isShuffle ? 'text-[#fa2d48]' : 'text-neutral-400'
+            isShuffle ? 'text-[var(--theme-accent)]' : 'text-neutral-400'
           }`}
           title="Acak"
         >
@@ -93,7 +93,7 @@ export const MiniPlayer: React.FC = () => {
         <button
           onClick={toggleRepeat}
           className={`hidden md:flex p-1.5 rounded-full hover:text-white transition-colors ${
-            repeatMode !== 'off' ? 'text-[#fa2d48]' : 'text-neutral-400'
+            repeatMode !== 'off' ? 'text-[var(--theme-accent)]' : 'text-neutral-400'
           }`}
           title="Ulangi"
         >

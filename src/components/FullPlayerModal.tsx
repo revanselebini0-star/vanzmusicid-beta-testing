@@ -157,7 +157,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             <button
               onClick={() => setVideoMode(true)}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full transition-all font-medium ${
-                isVideoMode ? 'bg-[#fa2d48] text-white shadow-sm' : 'text-white/70 hover:text-white'
+                isVideoMode ? 'bg-[var(--theme-accent)] text-white shadow-sm shadow-[var(--theme-glow)]' : 'text-white/70 hover:text-white'
               }`}
             >
               <Tv className="w-3.5 h-3.5" />
@@ -169,7 +169,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             <button
               onClick={() => setIsQueueOpen(prev => !prev)}
               className={`p-2 rounded-full transition-colors ${
-                isQueueOpen ? 'bg-white/20 text-[#fa2d48]' : 'hover:bg-white/10 text-white/80'
+                isQueueOpen ? 'bg-white/20 text-[var(--theme-accent)]' : 'hover:bg-white/10 text-white/80'
               }`}
               title="Daftar Putar Berikutnya"
             >
@@ -186,7 +186,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
           }`}>
             {isVideoMode ? (
               <div className="w-full aspect-video rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/20 bg-black/80 flex flex-col items-center justify-center p-6 text-center">
-                <Tv className="w-10 h-10 text-[#fa2d48] mb-2 animate-pulse" />
+                <Tv className="w-10 h-10 text-[var(--theme-accent)] mb-2 animate-pulse" />
                 <p className="text-sm font-bold text-white">Pemutaran Video Musik Aktif</p>
                 <p className="text-xs text-white/60 mt-1">Video YouTube diputar secara langsung di layar</p>
               </div>
@@ -212,7 +212,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             <div className="w-full md:w-1/2 h-full flex flex-col min-h-0">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
-                  <Quote className="w-4 h-4 text-[#fa2d48]" />
+                  <Quote className="w-4 h-4 text-[var(--theme-accent)]" />
                   <span className="text-xs font-bold uppercase tracking-wider text-white/80">
                     Lirik Asli
                   </span>
@@ -227,12 +227,12 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
 
                 <div className="flex items-center gap-2">
                   {isLoadingLyrics ? (
-                    <span className="text-[11px] text-[#fa2d48] animate-pulse">Memuat lirik asli...</span>
+                    <span className="text-[11px] text-[var(--theme-accent)] animate-pulse">Memuat lirik asli...</span>
                   ) : (
                     <button
                       id="search-lyrics-btn"
                       onClick={() => setLyricsSearchModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-[#fa2d48] hover:text-white text-white/80 border border-white/10 transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-[var(--theme-accent)] hover:text-white text-white/80 border border-white/10 transition-all cursor-pointer"
                       title="Cari atau ganti lirik jika belum akurat"
                     >
                       <Search className="w-3.5 h-3.5" />
@@ -256,7 +256,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                         onClick={() => seekTo(line.time)}
                         className={`cursor-pointer transition-all duration-300 transform origin-left select-none ${
                           isActive 
-                            ? 'text-white text-2xl md:text-3xl font-extrabold scale-105 filter drop-shadow-[0_4px_12px_rgba(250,45,72,0.4)]' 
+                            ? 'text-white text-2xl md:text-3xl font-extrabold scale-105 filter drop-shadow-[0_4px_12px_var(--theme-glow)]' 
                             : isPast 
                               ? 'text-white/40 text-lg md:text-xl font-semibold hover:text-white/70' 
                               : 'text-white/20 text-lg md:text-xl font-semibold hover:text-white/60'
@@ -268,14 +268,14 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                   })
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-center text-white/60 p-6">
-                    <Sparkles className="w-10 h-10 mb-3 text-[#fa2d48]" />
+                    <Sparkles className="w-10 h-10 mb-3 text-[var(--theme-accent)]" />
                     <p className="text-base font-bold text-white">Lirik resmi belum ditemukan secara otomatis</p>
                     <p className="text-xs text-white/50 mt-1 max-w-xs mx-auto">
                       Jangan khawatir! Kamu bisa mencari lirik resmi yang tepat atau menempel teks lirik untuk lagu ini.
                     </p>
                     <button
                       onClick={() => setLyricsSearchModalOpen(true)}
-                      className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fa2d48] hover:bg-[#e0263f] text-white text-xs font-bold shadow-lg shadow-[#fa2d48]/30 transition-all cursor-pointer"
+                      className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--theme-accent)] hover:opacity-90 text-white text-xs font-bold shadow-lg shadow-[var(--theme-glow)] transition-all cursor-pointer"
                     >
                       <Search className="w-4 h-4" />
                       <span>Cari Lirik Resmi Sekarang</span>
@@ -291,7 +291,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-neutral-900/90 backdrop-blur-2xl border-l border-white/10 p-5 z-20 flex flex-col">
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <ListMusic className="w-4 h-4 text-[#fa2d48]" />
+                  <ListMusic className="w-4 h-4 text-[var(--theme-accent)]" />
                   Berikutnya dalam Antrean
                 </h3>
                 <button 
@@ -309,7 +309,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                     onClick={() => usePlayer().playTrack(track)}
                     className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-colors ${
                       i === queueIndex 
-                        ? 'bg-[#fa2d48]/20 border border-[#fa2d48]/40' 
+                        ? 'bg-[var(--theme-accent)]/20 border border-[var(--theme-accent)]/40' 
                         : 'hover:bg-white/5'
                     }`}
                   >
@@ -320,7 +320,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                       className="w-10 h-10 rounded-lg object-cover shrink-0" 
                     />
                     <div className="min-w-0 flex-1">
-                      <p className={`text-xs font-semibold truncate ${i === queueIndex ? 'text-[#fa2d48]' : 'text-white'}`}>
+                      <p className={`text-xs font-semibold truncate ${i === queueIndex ? 'text-[var(--theme-accent)]' : 'text-white'}`}>
                         {track.title}
                       </p>
                       <p className="text-[10px] text-white/60 truncate">{track.artist}</p>
@@ -383,8 +383,8 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
               }}
             >
               <div 
-                className="h-full bg-white group-hover:bg-[#fa2d48] rounded-full transition-all duration-150"
-                style={{ width: `${progressPercent}%` }}
+                className="h-full bg-white group-hover:bg-[var(--theme-accent)] rounded-full transition-all duration-150"
+                style={{ width: `${progressPercent}%`, backgroundColor: 'var(--theme-accent)' }}
               />
             </div>
 
@@ -400,7 +400,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
               id="shuffle-toggle-btn"
               onClick={toggleShuffle}
               className={`p-2 rounded-full transition-all ${
-                isShuffle ? 'text-[#fa2d48] bg-white/10' : 'text-white/60 hover:text-white'
+                isShuffle ? 'text-[var(--theme-accent)] bg-white/10' : 'text-white/60 hover:text-white'
               }`}
               title="Acak Lagu"
             >
@@ -443,7 +443,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
               id="repeat-toggle-btn"
               onClick={toggleRepeat}
               className={`p-2 rounded-full transition-all relative ${
-                repeatMode !== 'off' ? 'text-[#fa2d48] bg-white/10' : 'text-white/60 hover:text-white'
+                repeatMode !== 'off' ? 'text-[var(--theme-accent)] bg-white/10' : 'text-white/60 hover:text-white'
               }`}
               title="Ulangi Lagu"
             >
@@ -464,7 +464,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                 step="0.01"
                 value={isMuted ? 0 : volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#fa2d48]"
+                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[var(--theme-accent)]"
               />
             </div>
 

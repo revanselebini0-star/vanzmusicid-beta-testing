@@ -24,7 +24,7 @@ export const TabBar: React.FC = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-                isActive ? 'text-[#fa2d48]' : 'text-neutral-400'
+                isActive ? 'text-[var(--theme-accent)]' : 'text-neutral-400'
               }`}
             >
               <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />

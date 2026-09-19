@@ -42,11 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = () => {
           onClick={() => setActiveTab('listen_now')}
           className="flex items-center gap-2 px-3 pt-2 cursor-pointer group"
         >
-          <div className="w-6 h-6 rounded-md bg-[#fa2d48] flex items-center justify-center text-white shadow-sm shadow-[#fa2d48]/40">
+          <div className="w-6 h-6 rounded-md bg-[var(--theme-accent)] flex items-center justify-center text-white shadow-sm shadow-[var(--theme-glow)]">
             <Music2 className="w-4 h-4 fill-current" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-white group-hover:text-[#fa2d48] transition-colors">
-            Vanz Music
+          <span className="font-bold text-xl tracking-tight text-white group-hover:text-[var(--theme-accent)] transition-colors">
+            Music
           </span>
         </div>
 
@@ -62,11 +62,11 @@ export const Sidebar: React.FC<SidebarProps> = () => {
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all text-left ${
                   isActive
-                    ? 'border border-[#fa2d48]/80 text-white bg-white/[0.04]'
+                    ? 'border border-[var(--theme-accent)]/80 text-white bg-white/[0.04]'
                     : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-neutral-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--theme-accent)]' : 'text-neutral-400'}`} />
                 <span>{item.label}</span>
               </button>
             );
@@ -115,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
           <button
             onClick={signInWithGoogleAction}
             disabled={isAuthLoading}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-[#fa2d48] hover:bg-[#e0263f] text-white text-xs font-bold shadow-md shadow-[#fa2d48]/20 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-[var(--theme-accent)] hover:opacity-90 text-white text-xs font-bold shadow-md shadow-[var(--theme-glow)] transition-colors"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Masuk</span>
