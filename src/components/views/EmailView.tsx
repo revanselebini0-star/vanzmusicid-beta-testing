@@ -47,6 +47,7 @@ export const EmailView: React.FC = () => {
   const [imageTab, setImageTab] = useState<'upload' | 'url'>('upload');
   const [isPosting, setIsPosting] = useState(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMessages = async () => {
@@ -115,6 +116,8 @@ export const EmailView: React.FC = () => {
       setImageUrl('');
       setTag('Update');
       setIsComposeOpen(false);
+      setSuccessNotice('Pesan update berhasil dikirim dan dipublikasikan!');
+      setTimeout(() => setSuccessNotice(null), 4000);
     } catch (err: any) {
       setErrorNotice('Gagal mengirim pesan. Silakan coba lagi.');
       console.error(err);
@@ -219,6 +222,21 @@ export const EmailView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Success Notification Banner */}
+      <AnimatePresence>
+        {successNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-3 text-emerald-300 shadow-xl"
+          >
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-medium">{successNotice}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
