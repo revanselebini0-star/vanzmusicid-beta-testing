@@ -33,8 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   ];
 
   return (
-    /* PERUBAHAN DI SINI: Ditambahkan class 'hidden md:flex' dan mengubah 'flex' bawaan menjadi 'md:flex' */
-    <aside className="hidden md:flex w-56 shrink-0 h-screen bg-[#1c1c1e] text-neutral-300 flex-col justify-between p-4 select-none border-r border-white/5 font-sans z-20">
+    <aside className="hidden lg:flex w-56 shrink-0 h-screen bg-[#1c1c1e] text-neutral-300 flex-col justify-between p-4 select-none border-r border-white/5 font-sans z-20">
       {/* Top Section: Logo & Nav items */}
       <div className="space-y-6">
         {/* Brand Header: Music icon + Music (No Apple Logo) */}
@@ -46,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
             <Music2 className="w-4 h-4 fill-current" />
           </div>
           <span className="font-bold text-xl tracking-tight text-white group-hover:text-[#fa2d48] transition-colors">
-            Vanz Music
+            Music
           </span>
         </div>
 

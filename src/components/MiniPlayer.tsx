@@ -42,15 +42,15 @@ export const MiniPlayer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-auto max-w-[95vw] pointer-events-auto">
+    <div className="fixed bottom-[64px] sm:bottom-3 left-1/2 -translate-x-1/2 z-40 w-[94vw] sm:w-auto max-w-md sm:max-w-none pointer-events-auto">
       <div 
         id="dock-player-bar"
-        className="bg-[#242426]/90 backdrop-blur-2xl border border-white/10 rounded-full px-4 py-2 shadow-2xl flex items-center gap-3 sm:gap-4 text-neutral-300 select-none transition-all"
+        className="bg-[#242426]/95 backdrop-blur-2xl border border-white/10 rounded-2xl sm:rounded-full px-3 sm:px-4 py-2 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-4 text-neutral-300 select-none transition-all"
       >
-        {/* Shuffle Button */}
+        {/* Shuffle Button (Hidden on small mobile) */}
         <button
           onClick={toggleShuffle}
-          className={`p-1.5 rounded-full hover:text-white transition-colors ${
+          className={`hidden md:flex p-1.5 rounded-full hover:text-white transition-colors ${
             isShuffle ? 'text-[#fa2d48]' : 'text-neutral-400'
           }`}
           title="Acak"
@@ -61,7 +61,7 @@ export const MiniPlayer: React.FC = () => {
         {/* Previous Track */}
         <button
           onClick={playPrevious}
-          className="p-1 rounded-full hover:text-white transition-colors text-neutral-300"
+          className="p-1 rounded-full hover:text-white transition-colors text-neutral-300 shrink-0"
           title="Sebelumnya"
         >
           <SkipBack className="w-4 h-4 fill-current" />
@@ -70,7 +70,7 @@ export const MiniPlayer: React.FC = () => {
         {/* Play/Pause Button */}
         <button
           onClick={togglePlay}
-          className="p-1.5 rounded-full hover:text-white transition-colors text-white"
+          className="p-1.5 rounded-full hover:text-white transition-colors text-white shrink-0"
           title={isPlaying ? "Jeda" : "Putar"}
         >
           {isPlaying ? (
@@ -83,16 +83,16 @@ export const MiniPlayer: React.FC = () => {
         {/* Next Track */}
         <button
           onClick={playNext}
-          className="p-1 rounded-full hover:text-white transition-colors text-neutral-300"
+          className="p-1 rounded-full hover:text-white transition-colors text-neutral-300 shrink-0"
           title="Berikutnya"
         >
           <SkipForward className="w-4 h-4 fill-current" />
         </button>
 
-        {/* Repeat Button */}
+        {/* Repeat Button (Hidden on small mobile) */}
         <button
           onClick={toggleRepeat}
-          className={`p-1.5 rounded-full hover:text-white transition-colors ${
+          className={`hidden md:flex p-1.5 rounded-full hover:text-white transition-colors ${
             repeatMode !== 'off' ? 'text-[#fa2d48]' : 'text-neutral-400'
           }`}
           title="Ulangi"
@@ -101,12 +101,12 @@ export const MiniPlayer: React.FC = () => {
         </button>
 
         {/* Divider */}
-        <div className="h-5 w-[1px] bg-white/10 mx-1" />
+        <div className="hidden sm:block h-5 w-[1px] bg-white/10 mx-1" />
 
         {/* Center: Track Artwork + Title/Artist + PRATINJAU pill */}
         <div 
           onClick={() => setFullPlayerOpen(true)}
-          className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity max-w-[220px] sm:max-w-xs md:max-w-sm"
+          className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity min-w-0 flex-1 sm:flex-initial max-w-[170px] sm:max-w-xs md:max-w-sm"
         >
           <img 
             src={displayTrack.thumbnail} 
