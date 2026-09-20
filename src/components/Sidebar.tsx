@@ -4,6 +4,7 @@ import {
   Search, 
   Home, 
   Sparkles, 
+  Bot,
   ExternalLink,
   LogIn, 
   LogOut,
@@ -30,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     { id: 'listen_now' as ViewTab, label: 'Beranda', icon: Home },
     { id: 'search' as ViewTab, label: 'Cari', icon: Search },
     { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: Sparkles },
+    { id: 'ai' as ViewTab, label: 'Vanz AI', icon: Bot },
     { id: 'account' as ViewTab, label: 'Akun', icon: UserIcon },
   ];
 

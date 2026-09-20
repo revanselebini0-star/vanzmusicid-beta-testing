@@ -2,11 +2,21 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: '5mb' }));
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
@@ -110,6 +120,33 @@ app.delete('/api/messages/:id', (req, res) => {
   const filtered = messages.filter((m: any) => m.id !== id);
   writeMessages(filtered);
   res.json({ success: true });
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    const contents = messages.map((m: any) => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }]
+    }));
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash-lite',
+      contents,
+      config: {
+        systemInstruction: 'Anda adalah Vanz AI, asisten musik dan chatbot pribadi yang ramah, hangat, dan asyik di aplikasi Vanz Music. Tugas Anda adalah membantu pengguna mencari rekomendasi lagu terbaik, mendiskusikan musik, lirik, atau sekadar teman cerita dan curhat yang menyenangkan. Gunakan bahasa Indonesia yang santai, ramah, ekspresif, dan berikan saran judul lagu atau artis yang spesifik jika diminta rekomendasi.'
+      }
+    });
+
+    res.json({ reply: response.text || 'Maaf, Vanz AI sedang berpikir sejenak. Coba lagi ya!' });
+  } catch (error: any) {
+    console.error('Gemini Chat Error:', error);
+    res.status(500).json({ error: error.message || 'Terjadi kesalahan pada Vanz AI' });
+  }
 });
 
 async function startServer() {
