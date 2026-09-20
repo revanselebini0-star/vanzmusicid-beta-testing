@@ -2,8 +2,6 @@ import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { 
   Search, 
-  Home, 
-  Sparkles, 
   Bot,
   ExternalLink,
   LogIn, 
@@ -11,6 +9,7 @@ import {
   User as UserIcon,
   Music2
 } from 'lucide-react';
+import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
 interface SidebarProps {
@@ -28,11 +27,10 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   } = usePlayer();
 
   const navItems = [
-    { id: 'listen_now' as ViewTab, label: 'Beranda', icon: Home },
+    { id: 'listen_now' as ViewTab, label: 'Beranda', icon: HomeIcon },
     { id: 'search' as ViewTab, label: 'Cari', icon: Search },
-    { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: Sparkles },
-    { id: 'ai' as ViewTab, label: 'Vanz AI', icon: Bot },
-    { id: 'account' as ViewTab, label: 'Akun', icon: UserIcon },
+    { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: RecommendationIcon },
+    { id: 'account' as ViewTab, label: 'Akun', icon: AccountIcon },
   ];
 
   return (

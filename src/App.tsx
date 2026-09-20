@@ -10,7 +10,6 @@ import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
 import { LibraryView } from './components/views/LibraryView';
 import { AccountView } from './components/views/AccountView';
-import { AiView } from './components/views/AiView';
 import { Track } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -95,9 +94,9 @@ const AppContent: React.FC = () => {
               </motion.div>
             )}
 
-            {activeTab === 'library' && (
+            {activeTab === 'playlist' && (
               <motion.div
-                key="library"
+                key="playlist"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
@@ -107,18 +106,6 @@ const AppContent: React.FC = () => {
                   onCreatePlaylistClick={() => handleOpenPlaylistModal()}
                   onOpenPlaylistModal={handleOpenPlaylistModal} 
                 />
-              </motion.div>
-            )}
-
-            {activeTab === 'ai' && (
-              <motion.div
-                key="ai"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-              >
-                <AiView />
               </motion.div>
             )}
 

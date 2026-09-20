@@ -259,7 +259,7 @@ export const ListenNowView: React.FC<ListenNowViewProps> = ({ onOpenPlaylistModa
               </h2>
             </div>
             <button
-              onClick={() => setActiveTab('library')}
+              onClick={() => setActiveTab('playlist')}
               className="text-xs font-semibold text-[#fa2d48] hover:underline flex items-center gap-1"
             >
               Lihat di Perpustakaan <ChevronRight className="w-3.5 h-3.5" />

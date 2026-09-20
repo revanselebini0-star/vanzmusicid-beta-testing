@@ -133,14 +133,14 @@ app.post('/api/ai/chat', async (req, res) => {
       model: 'gemini-3.5-flash-lite',
       contents,
       config: {
-        systemInstruction: 'Anda adalah Vanz AI, asisten musik dan chatbot pribadi yang ramah, hangat, dan asyik di aplikasi Vanz Music. Tugas Anda adalah membantu pengguna mencari rekomendasi lagu terbaik, mendiskusikan musik, lirik, atau sekadar teman cerita dan curhat yang menyenangkan. Gunakan bahasa Indonesia yang santai, ramah, ekspresif, dan berikan saran judul lagu atau artis yang spesifik jika diminta rekomendasi.'
+        systemInstruction: 'Anda adalah Asisten Musik, asisten musik dan chatbot pribadi yang ramah, hangat, dan asyik di aplikasi ini. Tugas Anda adalah membantu pengguna mencari rekomendasi lagu terbaik, mendiskusikan musik, lirik, atau sekadar teman cerita dan curhat yang menyenangkan. Gunakan bahasa Indonesia yang santai, ramah, ekspresif, dan berikan saran judul lagu atau artis yang spesifik jika diminta rekomendasi.'
       }
     });
 
-    res.json({ reply: response.text || 'Maaf, Vanz AI sedang berpikir sejenak. Coba lagi ya!' });
+    res.json({ reply: response.text || 'Maaf, asisten sedang berpikir sejenak. Coba lagi ya!' });
   } catch (error: any) {
     console.error('Gemini Chat Error:', error);
-    res.status(500).json({ error: error.message || 'Terjadi kesalahan pada Vanz AI' });
+    res.status(500).json({ error: error.message || 'Terjadi kesalahan pada asisten musik' });
   }
 });
 

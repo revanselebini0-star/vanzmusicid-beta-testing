@@ -184,7 +184,7 @@ export const AppleNavbar: React.FC<AppleNavbarProps> = ({ onSearchFocus }) => {
                   <div className="mt-2 space-y-1">
                     <button
                       onClick={() => {
-                        setActiveTab('library');
+                        setActiveTab('playlist');
                         setIsProfileMenuOpen(false);
                       }}
                       className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"

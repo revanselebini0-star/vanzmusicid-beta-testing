@@ -1,17 +1,18 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { Search, Home, Sparkles, Bot, User } from 'lucide-react';
+import { Search, ListMusic } from 'lucide-react';
+import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
 export const TabBar: React.FC = () => {
   const { activeTab, setActiveTab } = usePlayer();
 
   const tabs: { id: ViewTab; label: string; icon: any }[] = [
-    { id: 'listen_now', label: 'Beranda', icon: Home },
-    { id: 'recommendations', label: 'Rekomendasi', icon: Sparkles },
-    { id: 'ai', label: 'Vanz AI', icon: Bot },
+    { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
+    { id: 'recommendations', label: 'Rekomendasi', icon: RecommendationIcon },
+    { id: 'playlist', label: 'Playlist', icon: ListMusic },
     { id: 'search', label: 'Cari', icon: Search },
-    { id: 'account', label: 'Akun', icon: User },
+    { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 
   return (

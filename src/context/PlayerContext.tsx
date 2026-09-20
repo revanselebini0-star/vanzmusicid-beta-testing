@@ -661,13 +661,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const removeSongFromPlaylistAction = async (playlistId: string, trackId: string) => {
+    console.log("Removing track:", trackId, "from playlist:", playlistId);
     await removeTrackFromPlaylist(playlistId, trackId);
     await refreshPlaylists();
+    console.log("Track removed and playlists refreshed.");
   };
 
   const deletePlaylistAction = async (playlistId: string) => {
+    console.log("Deleting playlist:", playlistId);
     await deleteLocalPlaylist(playlistId);
     await refreshPlaylists();
+    console.log("Playlist deleted and playlists refreshed.");
   };
 
   return (

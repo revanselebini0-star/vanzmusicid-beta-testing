@@ -16,6 +16,11 @@ export const AccountView: React.FC = () => {
     >
       <h1 className="text-3xl font-black tracking-tight text-white mb-2">Akun Saya</h1>
 
+      <div className="bg-[#1c1c1e]/50 border border-white/10 rounded-2xl p-4 text-center">
+        <p className="text-sm font-semibold text-white">Vanz Music Beta Testing</p>
+        <p className="text-xs text-neutral-400 mt-1">Versi ini sedang dalam tahap pengujian beta. Terima kasih telah membantu kami!</p>
+      </div>
+
       <div className="bg-[#1c1c1e] border border-white/10 rounded-3xl p-6 shadow-xl space-y-6">
         <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Profil Pengguna</h2>
 
