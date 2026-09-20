@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { Search, ListMusic } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
@@ -10,7 +10,6 @@ export const TabBar: React.FC = () => {
   const tabs: { id: ViewTab; label: string; icon: any }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
     { id: 'recommendations', label: 'Rekomendasi', icon: RecommendationIcon },
-    { id: 'playlist', label: 'Playlist', icon: ListMusic },
     { id: 'search', label: 'Cari', icon: Search },
     { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
@@ -52,4 +51,3 @@ export const TabBar: React.FC = () => {
     </nav>
   );
 };
-
