@@ -10,7 +10,6 @@ import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
 import { LibraryView } from './components/views/LibraryView';
 import { AccountView } from './components/views/AccountView';
-import { EmailView } from './components/views/EmailView';
 import { Track } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -62,10 +61,10 @@ const AppContent: React.FC = () => {
             {activeTab === 'search' && (
               <motion.div
                 key="search"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <SearchView onOpenPlaylistModal={handleOpenPlaylistModal} />
               </motion.div>
@@ -74,10 +73,10 @@ const AppContent: React.FC = () => {
             {activeTab === 'listen_now' && (
               <motion.div
                 key="listen_now"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <ListenNowView onOpenPlaylistModal={handleOpenPlaylistModal} />
               </motion.div>
@@ -86,10 +85,10 @@ const AppContent: React.FC = () => {
             {(activeTab === 'recommendations' || activeTab === 'radio') && (
               <motion.div
                 key="recommendations"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <RecommendationsView onOpenPlaylistModal={handleOpenPlaylistModal} />
               </motion.div>
@@ -98,10 +97,10 @@ const AppContent: React.FC = () => {
             {activeTab === 'library' && (
               <motion.div
                 key="library"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <LibraryView 
                   onCreatePlaylistClick={() => handleOpenPlaylistModal()}
@@ -110,25 +109,13 @@ const AppContent: React.FC = () => {
               </motion.div>
             )}
 
-            {activeTab === 'email' && (
-              <motion.div
-                key="email"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                <EmailView />
-              </motion.div>
-            )}
-
             {activeTab === 'account' && (
               <motion.div
                 key="account"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <AccountView />
               </motion.div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { Search, Home, Sparkles, User, Mail } from 'lucide-react';
+import { Search, Home, Sparkles, User } from 'lucide-react';
 import { ViewTab } from '../types';
 
 export const TabBar: React.FC = () => {
@@ -10,7 +10,6 @@ export const TabBar: React.FC = () => {
     { id: 'listen_now', label: 'Beranda', icon: Home },
     { id: 'recommendations', label: 'Rekomendasi', icon: Sparkles },
     { id: 'search', label: 'Cari', icon: Search },
-    { id: 'email', label: 'Email', icon: Mail },
     { id: 'account', label: 'Akun', icon: User },
   ];
 

@@ -69,6 +69,8 @@ interface PlayerContextType {
   setActiveTab: (tab: ViewTab) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  themeMode: 'dark' | 'light' | 'system';
+  setThemeMode: (mode: 'dark' | 'light' | 'system') => void;
 
   // Firebase Auth
   user: User | null;
@@ -133,22 +135,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
 
-  // IndexedDB state
-  const [favorites, setFavorites] = useState<Track[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [history, setHistory] = useState<Track[]>([]);
-
-  // Navigation and Theme
-  const [activeTab, setActiveTab] = useState<ViewTab>('search');
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return true;
-  });
-
-  // Firebase Auth state
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
-
-  // YouTube Player instance
+  // YouTube Player instance & Refs
   const ytPlayerRef = useRef<any>(null);
   const ytContainerId = 'vanz-yt-player';
   const progressTimerRef = useRef<any>(null);
@@ -163,7 +150,55 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     document.documentElement.style.setProperty('--theme-glow', palette.glow);
   }, [currentTrack]);
 
-  const toggleDarkMode = () => setIsDarkMode(prev => !prev);
+  // IndexedDB state
+  const [favorites, setFavorites] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [history, setHistory] = useState<Track[]>([]);
+
+  // Navigation and Theme
+  const [activeTab, setActiveTab] = useState<ViewTab>('search');
+  const [themeMode, setThemeModeState] = useState<'dark' | 'light' | 'system'>(() => {
+    try {
+      const saved = localStorage.getItem('vanz_theme_mode');
+      if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
+    } catch {}
+    return 'dark';
+  });
+
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (themeMode === 'light') return false;
+    if (themeMode === 'dark') return true;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    let dark = true;
+    if (themeMode === 'light') {
+      dark = false;
+    } else if (themeMode === 'dark') {
+      dark = true;
+    } else {
+      dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    setIsDarkMode(dark);
+    document.documentElement.classList.toggle('dark', dark);
+    try {
+      localStorage.setItem('vanz_theme_mode', themeMode);
+    } catch {}
+  }, [themeMode]);
+
+  const setThemeMode = (mode: 'dark' | 'light' | 'system') => {
+    setThemeModeState(mode);
+  };
+
+  const toggleDarkMode = () => {
+    const next = themeMode === 'dark' ? 'light' : 'dark';
+    setThemeMode(next);
+  };
+
+  // Firebase Auth state
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // Initialize Firebase Auth Listener
   useEffect(() => {
@@ -687,6 +722,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveTab,
         isDarkMode,
         toggleDarkMode,
+        themeMode,
+        setThemeMode,
 
         user,
         isAuthLoading,
