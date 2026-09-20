@@ -11,11 +11,6 @@ app.use(express.json({ limit: '5mb' }));
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
 });
 
 const DATA_DIR = path.join(process.cwd(), 'data');
