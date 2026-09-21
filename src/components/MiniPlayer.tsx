@@ -84,15 +84,15 @@ export const MiniPlayer: React.FC = () => {
 
   return (
     <div 
-      className={`fixed bottom-[calc(max(env(safe-area-inset-bottom),12px)+68px)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95vw] sm:w-auto max-w-md lg:max-w-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`fixed bottom-[calc(max(env(safe-area-inset-bottom),12px)+68px)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95vw] sm:w-auto max-w-md lg:max-w-none transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
         isBottomBarsVisible
-          ? 'translate-y-0 opacity-100 pointer-events-auto'
-          : 'translate-y-[64px] lg:translate-y-0 opacity-100 pointer-events-auto shadow-2xl'
+          ? 'translate-y-0 pointer-events-auto'
+          : 'translate-y-[64px] lg:translate-y-0 pointer-events-auto shadow-2xl'
       }`}
     >
       <div 
         id="dock-player-bar"
-        className="relative bg-[#242426]/95 backdrop-blur-2xl border border-white/10 rounded-2xl sm:rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-2xl flex items-center justify-between sm:justify-start gap-2 sm:gap-3.5 text-neutral-300 select-none transition-all ring-1 ring-black/40 overflow-hidden group/dock"
+        className="relative bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.14] rounded-2xl sm:rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.7)] flex items-center justify-between sm:justify-start gap-2 sm:gap-3.5 text-neutral-300 select-none transition-all ring-1 ring-white/5 overflow-hidden group/dock before:absolute before:inset-0 before:bg-gradient-to-b before:from-white/[0.06] before:to-transparent before:pointer-events-none"
       >
         {/* Subtle, slim top progress bar indicating song duration */}
         <div 

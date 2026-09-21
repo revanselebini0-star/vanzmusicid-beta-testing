@@ -39,12 +39,28 @@ const AppContent: React.FC = () => {
           const currentY = el.scrollTop;
           const diff = currentY - lastScrollY.current;
 
+          // Always visible near top of page (including iOS pull-down bounce)
+          if (currentY <= 25) {
+            setIsBottomBarsVisible(true);
+            lastScrollY.current = Math.max(0, currentY);
+            ticking.current = false;
+            return;
+          }
+
+          // Prevent false triggers on iOS bottom bounce
+          const maxScroll = el.scrollHeight - el.clientHeight;
+          if (maxScroll > 0 && currentY >= maxScroll - 20) {
+            lastScrollY.current = currentY;
+            ticking.current = false;
+            return;
+          }
+
           // Scroll down past threshold -> hide bottom bars
           if (diff > 8 && currentY > 40) {
             setIsBottomBarsVisible(false);
           } 
-          // Scroll up or near top -> show bottom bars
-          else if (diff < -6 || currentY <= 20) {
+          // Scroll up past threshold -> show bottom bars
+          else if (diff < -6) {
             setIsBottomBarsVisible(true);
           }
 

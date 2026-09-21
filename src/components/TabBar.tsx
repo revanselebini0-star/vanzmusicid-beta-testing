@@ -16,13 +16,16 @@ export const TabBar: React.FC = () => {
 
   return (
     <nav 
-      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1c1c1e]/95 backdrop-blur-xl border-t border-white/10 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 px-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-2xl backdrop-saturate-150 border-t border-white/[0.12] shadow-[0_-4px_24px_rgba(0,0,0,0.5)] pb-[max(env(safe-area-inset-bottom),8px)] pt-2 px-2 overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
         isBottomBarsVisible 
-          ? 'translate-y-0 opacity-100 pointer-events-auto shadow-2xl' 
-          : 'translate-y-full opacity-0 pointer-events-none'
+          ? 'translate-y-0 pointer-events-auto' 
+          : 'translate-y-full pointer-events-none'
       }`}
     >
-      <div className="flex items-center justify-around">
+      {/* Specular glass reflection layer */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.09] via-transparent to-transparent pointer-events-none" />
+
+      <div className="flex items-center justify-around relative z-10">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id || (tab.id === 'recommendations' && activeTab === 'radio');
@@ -39,8 +42,8 @@ export const TabBar: React.FC = () => {
               {isCenterSearch ? (
                 <div className={`p-1.5 rounded-xl transition-all ${
                   isActive 
-                    ? 'bg-[var(--theme-accent)] text-white shadow-md shadow-[var(--theme-glow)]' 
-                    : 'bg-white/5 text-neutral-300'
+                    ? 'bg-[var(--theme-accent)] text-white shadow-lg shadow-[var(--theme-glow)]' 
+                    : 'bg-white/10 text-neutral-200 border border-white/10'
                 }`}>
                   <Icon className="w-5 h-5" />
                 </div>
