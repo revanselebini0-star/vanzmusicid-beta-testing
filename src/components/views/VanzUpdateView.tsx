@@ -18,7 +18,9 @@ import {
   X,
   Radio,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Heart,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -26,11 +28,13 @@ import {
   toggleVoteItem,
   createVoteItem,
   addReplyToVote,
+  toggleReplyLike,
   getLocalVotes,
   type CommunityVoteItem,
   type CommunityReply,
   type VoteSyncStatus
 } from '../../lib/voteService';
+import { AdminLikeBoosterModal, type AdminBoosterTab } from '../AdminLikeBoosterModal';
 
 const VANZ_LOGO = 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png';
 
@@ -84,7 +88,7 @@ function formatExactDate(timestamp: number): string {
 }
 
 export const VanzUpdateView: React.FC = () => {
-  const { user, signInWithGoogleAction, signInWithGuestProfile, isAuthLoading } = usePlayer();
+  const { user, isAdmin, signInWithGoogleAction, signInWithGuestProfile, isAuthLoading } = usePlayer();
 
   // Patch releases (Preserving user modifications)
   const releases: PatchRelease[] = [
@@ -162,6 +166,12 @@ export const VanzUpdateView: React.FC = () => {
   const [guestNameInput, setGuestNameInput] = useState<string>('');
   const [showGuestLoginInput, setShowGuestLoginInput] = useState(false);
   const [syncStatus, setSyncStatus] = useState<VoteSyncStatus>('cloud_live');
+
+  // Admin Booster Modal State
+  const [isBoosterModalOpen, setIsBoosterModalOpen] = useState(false);
+  const [boosterInitialTab, setBoosterInitialTab] = useState<AdminBoosterTab>('voting');
+  const [boosterVoteId, setBoosterVoteId] = useState<string>('');
+  const [boosterReplyId, setBoosterReplyId] = useState<string>('');
 
   // Real-time synchronization subscription (works in GitHub Pages, Vercel, Netlify, Cloud Run)
   useEffect(() => {
@@ -292,6 +302,19 @@ export const VanzUpdateView: React.FC = () => {
       console.error('Failed to submit reply:', e);
     } finally {
       setSubmittingReplyId(null);
+    }
+  };
+
+  const handleToggleReplyLike = async (itemId: string, replyId: string) => {
+    if (!user) {
+      triggerLoginNotice('untuk menyukai komentar ini');
+      return;
+    }
+    try {
+      const updated = await toggleReplyLike(itemId, replyId, user.uid);
+      setVotesList(updated);
+    } catch (err) {
+      console.error('Failed to like reply:', err);
     }
   };
 
@@ -468,6 +491,21 @@ export const VanzUpdateView: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1.5">
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    setBoosterInitialTab('voting');
+                    setBoosterVoteId('');
+                    setBoosterReplyId('');
+                    setIsBoosterModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-black text-xs font-black shadow-md shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 active:scale-95 transition-all shrink-0"
+                  title="Buka Pusat Kendali Booster Admin"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>👑 Admin Booster</span>
+                </button>
+              )}
               <button
                 onClick={handleManualRefresh}
                 disabled={isSyncing}
@@ -693,6 +731,25 @@ export const VanzUpdateView: React.FC = () => {
                           <MessageSquare className="w-3 h-3" />
                           <span>{repliesCount > 0 ? `${repliesCount} Komentar` : 'Tulis Komentar'}</span>
                         </button>
+
+                        {/* Admin Booster Badge on Item */}
+                        {isAdmin && (
+                          <>
+                            <span className="text-neutral-600 hidden xs:inline">•</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBoosterInitialTab('voting');
+                                setBoosterVoteId(item.id);
+                                setIsBoosterModalOpen(true);
+                              }}
+                              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
+                            >
+                              <Zap className="w-2.5 h-2.5 fill-current" />
+                              <span>Boost Vote</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -756,6 +813,42 @@ export const VanzUpdateView: React.FC = () => {
                                   <p className="text-neutral-300 pl-5 leading-relaxed text-xs sm:text-[13px] break-words">
                                     {reply.content}
                                   </p>
+
+                                  {/* Reply Actions: Like button & Admin Booster */}
+                                  <div className="pl-5 pt-0.5 flex items-center gap-3 text-[11px]">
+                                    <button
+                                      onClick={() => handleToggleReplyLike(item.id, reply.id)}
+                                      className={`flex items-center gap-1 transition-colors ${
+                                        user && Array.isArray(reply.likedBy) && reply.likedBy.includes(user.uid)
+                                          ? 'text-rose-400 font-bold'
+                                          : 'text-neutral-400 hover:text-rose-400'
+                                      }`}
+                                    >
+                                      <Heart
+                                        className={`w-3.5 h-3.5 ${
+                                          user && Array.isArray(reply.likedBy) && reply.likedBy.includes(user.uid)
+                                            ? 'fill-current'
+                                            : ''
+                                        }`}
+                                      />
+                                      <span>{(reply.likes || 0).toLocaleString('id-ID')}</span>
+                                    </button>
+
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => {
+                                          setBoosterInitialTab('comments');
+                                          setBoosterVoteId(item.id);
+                                          setBoosterReplyId(reply.id);
+                                          setIsBoosterModalOpen(true);
+                                        }}
+                                        className="text-[10px] font-bold text-amber-300 hover:text-amber-200 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 flex items-center gap-1 transition-colors"
+                                      >
+                                        <Zap className="w-2.5 h-2.5 fill-current" />
+                                        <span>Boost Like</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -944,6 +1037,15 @@ export const VanzUpdateView: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Admin Like & Vote Booster Modal */}
+      <AdminLikeBoosterModal
+        isOpen={isBoosterModalOpen}
+        onClose={() => setIsBoosterModalOpen(false)}
+        initialTab={boosterInitialTab}
+        initialVoteItemId={boosterVoteId}
+        initialReplyId={boosterReplyId}
+      />
     </motion.div>
   );
 };

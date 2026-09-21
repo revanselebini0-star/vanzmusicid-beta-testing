@@ -408,12 +408,12 @@ export const AccountView: React.FC = () => {
                     className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-95 text-black font-extrabold text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5"
                   >
                     <Sliders className="w-3.5 h-3.5" />
-                    <span>Buka Booster Like</span>
+                    <span>Pusat Booster Admin</span>
                   </button>
                 </div>
 
                 <p className="text-xs text-neutral-300">
-                  Sebagai admin/owner, Anda dapat menambah like lagu sesuka hati (kalo gabut) baik untuk lagu yang sedang diputar maupun lagu pencarian.
+                  Sebagai admin resmi ({ADMIN_EMAIL}), Anda memiliki kendali penuh untuk melakukan booster like lagu, booster voting usulan komunitas, dan booster like komentar sesuka hati.
                 </p>
 
                 {currentTrack && (

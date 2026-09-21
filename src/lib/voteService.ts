@@ -3,8 +3,12 @@ import {
   collection, 
   doc, 
   setDoc, 
+  deleteDoc,
   onSnapshot
 } from 'firebase/firestore';
+import { isUserAdmin, ADMIN_EMAIL } from './songLikeService';
+import { User } from 'firebase/auth';
+import { UserProfile } from '../types';
 
 export interface CommunityReply {
   id: string;
@@ -14,6 +18,8 @@ export interface CommunityReply {
   userId: string;
   content: string;
   createdAt: number;
+  likes?: number;
+  likedBy?: string[];
 }
 
 export interface CommunityVoteItem {
@@ -29,6 +35,8 @@ export interface CommunityVoteItem {
   voters: string[];
   status: 'Direncanakan' | 'Dalam Proses' | 'Selesai';
   replies: CommunityReply[];
+  lastBoostedAt?: number;
+  boostedVotes?: number;
 }
 
 export type VoteSyncStatus = 'cloud_live' | 'permission_denied' | 'local_fallback';
@@ -245,6 +253,8 @@ function sanitizeVoteForFirestore(item: any): any {
     votes: typeof item.votes === 'number' ? item.votes : 1,
     voters: Array.isArray(item.voters) ? item.voters : [],
     status: item.status || 'Direncanakan',
+    lastBoostedAt: item.lastBoostedAt || null,
+    boostedVotes: typeof item.boostedVotes === 'number' ? item.boostedVotes : 0,
     replies: Array.isArray(item.replies)
       ? item.replies.map((r: any) => ({
           id: r.id || '',
@@ -253,7 +263,9 @@ function sanitizeVoteForFirestore(item: any): any {
           authorEmail: r.authorEmail || '',
           userId: r.userId || 'guest',
           content: r.content || '',
-          createdAt: r.createdAt || Date.now()
+          createdAt: r.createdAt || Date.now(),
+          likes: typeof r.likes === 'number' ? r.likes : 0,
+          likedBy: Array.isArray(r.likedBy) ? r.likedBy : []
         }))
       : []
   };
@@ -425,3 +437,390 @@ export async function addReplyToVote(
 
   return updatedVotes;
 }
+
+// User Like / Unlike on a Comment / Reply
+export async function toggleReplyLike(
+  itemId: string,
+  replyId: string,
+  userId: string
+): Promise<CommunityVoteItem[]> {
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      const replies = (item.replies || []).map((reply) => {
+        if (reply.id === replyId) {
+          const likedBy = Array.isArray(reply.likedBy) ? [...reply.likedBy] : [];
+          const hasLiked = likedBy.includes(userId);
+          const newLikedBy = hasLiked
+            ? likedBy.filter((id) => id !== userId)
+            : [...likedBy, userId];
+          const currentLikes = typeof reply.likes === 'number' ? reply.likes : 0;
+          const newLikes = hasLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1;
+
+          return {
+            ...reply,
+            likes: newLikes,
+            likedBy: newLikedBy
+          };
+        }
+        return reply;
+      });
+
+      updatedTargetItem = { ...item, replies };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+    } catch (e) {
+      console.warn('Firestore toggle reply like error:', e);
+    }
+  }
+
+  return updatedVotes;
+}
+
+// ============================================================================
+// ADMIN BOOSTER & KENDALI KHUSUS (ADMIN ONLY)
+// ============================================================================
+
+/**
+ * Admin Booster: Menambah Vote (+10, +50, +100, +500, +1.000, dst) pada Usulan Vote
+ */
+export async function adminBoostVoteItem(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  boostAmount: number
+): Promise<{ success: boolean; newCount: number; message: string }> {
+  if (!isUserAdmin(user)) {
+    return {
+      success: false,
+      newCount: 0,
+      message: 'Akses ditolak: Hanya admin resmi yang diizinkan melakukan boost voting.'
+    };
+  }
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+  let newVotes = 0;
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      newVotes = Math.max(0, (item.votes || 0) + boostAmount);
+      updatedTargetItem = {
+        ...item,
+        votes: newVotes,
+        boostedVotes: ((item.boostedVotes || 0) + boostAmount),
+        lastBoostedAt: Date.now()
+      };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return {
+        success: true,
+        newCount: newVotes,
+        message: `Berhasil menambahkan +${boostAmount.toLocaleString('id-ID')} vote!`
+      };
+    } catch (e: any) {
+      return {
+        success: true,
+        newCount: newVotes,
+        message: `Vote di-boost +${boostAmount} (tersimpan lokal & cloud).`
+      };
+    }
+  }
+
+  return { success: false, newCount: 0, message: 'Item usulan tidak ditemukan.' };
+}
+
+/**
+ * Admin Set Exact: Atur Angka Vote Persis pada Usulan
+ */
+export async function adminSetExactVoteItem(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  exactCount: number
+): Promise<{ success: boolean; newCount: number; message: string }> {
+  if (!isUserAdmin(user)) {
+    return {
+      success: false,
+      newCount: 0,
+      message: 'Akses ditolak: Hanya admin resmi yang diizinkan mengatur vote.'
+    };
+  }
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+  const targetCount = Math.max(0, exactCount);
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      updatedTargetItem = {
+        ...item,
+        votes: targetCount,
+        lastBoostedAt: Date.now()
+      };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return {
+        success: true,
+        newCount: targetCount,
+        message: `Jumlah vote diatur ke ${targetCount.toLocaleString('id-ID')}.`
+      };
+    } catch (e) {
+      return {
+        success: true,
+        newCount: targetCount,
+        message: `Jumlah vote diatur ke ${targetCount}.`
+      };
+    }
+  }
+
+  return { success: false, newCount: 0, message: 'Item usulan tidak ditemukan.' };
+}
+
+/**
+ * Admin Booster: Menambah Like (+10, +50, +100, dst) pada Komentar / Balasan
+ */
+export async function adminBoostReplyLikes(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  replyId: string,
+  boostAmount: number
+): Promise<{ success: boolean; newCount: number; message: string }> {
+  if (!isUserAdmin(user)) {
+    return {
+      success: false,
+      newCount: 0,
+      message: 'Akses ditolak: Hanya admin resmi yang diizinkan menambah like komentar.'
+    };
+  }
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+  let newLikes = 0;
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      const replies = (item.replies || []).map((reply) => {
+        if (reply.id === replyId) {
+          newLikes = Math.max(0, (reply.likes || 0) + boostAmount);
+          return {
+            ...reply,
+            likes: newLikes
+          };
+        }
+        return reply;
+      });
+
+      updatedTargetItem = { ...item, replies };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return {
+        success: true,
+        newCount: newLikes,
+        message: `Berhasil menambahkan +${boostAmount.toLocaleString('id-ID')} Like ke komentar!`
+      };
+    } catch (e) {
+      return {
+        success: true,
+        newCount: newLikes,
+        message: `Like komentar di-boost +${boostAmount}.`
+      };
+    }
+  }
+
+  return { success: false, newCount: 0, message: 'Komentar tidak ditemukan.' };
+}
+
+/**
+ * Admin Set Exact: Atur Angka Like Persis pada Komentar / Balasan
+ */
+export async function adminSetExactReplyLikes(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  replyId: string,
+  exactLikes: number
+): Promise<{ success: boolean; newCount: number; message: string }> {
+  if (!isUserAdmin(user)) {
+    return {
+      success: false,
+      newCount: 0,
+      message: 'Akses ditolak: Hanya admin resmi yang diizinkan mengatur like komentar.'
+    };
+  }
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+  const targetLikes = Math.max(0, exactLikes);
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      const replies = (item.replies || []).map((reply) => {
+        if (reply.id === replyId) {
+          return {
+            ...reply,
+            likes: targetLikes
+          };
+        }
+        return reply;
+      });
+
+      updatedTargetItem = { ...item, replies };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return {
+        success: true,
+        newCount: targetLikes,
+        message: `Jumlah like komentar diatur ke ${targetLikes.toLocaleString('id-ID')}.`
+      };
+    } catch (e) {
+      return {
+        success: true,
+        newCount: targetLikes,
+        message: `Jumlah like komentar diatur ke ${targetLikes}.`
+      };
+    }
+  }
+
+  return { success: false, newCount: 0, message: 'Komentar tidak ditemukan.' };
+}
+
+/**
+ * Admin Update Status (Direncanakan / Dalam Proses / Selesai)
+ */
+export async function adminChangeVoteStatus(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  status: 'Direncanakan' | 'Dalam Proses' | 'Selesai'
+): Promise<boolean> {
+  if (!isUserAdmin(user)) return false;
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      updatedTargetItem = { ...item, status };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn('Firestore change status error:', e);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Admin Delete Vote Item
+ */
+export async function adminDeleteVoteItem(
+  user: User | UserProfile | null | undefined,
+  itemId: string
+): Promise<boolean> {
+  if (!isUserAdmin(user)) return false;
+
+  const current = getLocalVotes();
+  const filtered = current.filter((item) => item.id !== itemId);
+  saveLocalVotes(filtered);
+
+  try {
+    await deleteDoc(doc(db, 'community_votes', itemId));
+    return true;
+  } catch (e) {
+    console.warn('Firestore delete vote item error:', e);
+    return true;
+  }
+}
+
+/**
+ * Admin Delete Reply
+ */
+export async function adminDeleteReply(
+  user: User | UserProfile | null | undefined,
+  itemId: string,
+  replyId: string
+): Promise<boolean> {
+  if (!isUserAdmin(user)) return false;
+
+  const current = getLocalVotes();
+  let updatedTargetItem: CommunityVoteItem | null = null;
+
+  const updatedVotes = current.map((item) => {
+    if (item.id === itemId) {
+      const replies = (item.replies || []).filter((r) => r.id !== replyId);
+      updatedTargetItem = { ...item, replies };
+      return updatedTargetItem;
+    }
+    return item;
+  });
+
+  saveLocalVotes(updatedVotes);
+
+  if (updatedTargetItem) {
+    try {
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn('Firestore delete reply error:', e);
+    }
+  }
+
+  return false;
+}
+
