@@ -1,0 +1,54 @@
+[
+  {
+    "id": "vote-1",
+    "title": "Navigasi Dark Liquid Glass & Auto-Hide Bar",
+    "description": "Navbar bawah bergaya kaca transparan hitam dengan responsivitas cerdas saat scroll.",
+    "authorName": "Admin Vanz",
+    "authorPhoto": "https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png",
+    "authorEmail": "revan.seleb.ini0@gmail.com",
+    "userId": "admin-vanz",
+    "createdAt": 1789923248208,
+    "votes": 1,
+    "voters": [
+      "admin-vanz"
+    ],
+    "status": "Selesai",
+    "replies": [
+      {
+        "id": "rep-admin-1",
+        "authorName": "Admin Vanz",
+        "authorPhoto": "https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png",
+        "authorEmail": "revan.seleb.ini0@gmail.com",
+        "userId": "admin-vanz",
+        "content": "Fitur ini telah resmi aktif di versi v2.5.0 Beta Testing. Silakan berikan masukan atau tanggapan Anda di sini.",
+        "createdAt": 1789923248208
+      }
+    ]
+  },
+  {
+    "id": "vote-2",
+    "title": "Fitur Simpan Offline (Putar lagu tanpa kuota internet)",
+    "description": "Penyimpanan cache audio di penyimpanan lokal perangkat agar bisa dinikmati saat offline atau tanpa koneksi internet.",
+    "authorName": "Admin Vanz",
+    "authorPhoto": "https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png",
+    "authorEmail": "revan.seleb.ini0@gmail.com",
+    "userId": "admin-vanz",
+    "createdAt": 1789836848208,
+    "votes": 1,
+    "voters": [
+      "admin-vanz"
+    ],
+    "status": "Dalam Proses",
+    "replies": [
+      {
+        "id": "rep-admin-2",
+        "authorName": "Admin Vanz",
+        "authorPhoto": "https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png",
+        "authorEmail": "revan.seleb.ini0@gmail.com",
+        "userId": "admin-vanz",
+        "content": "Sedang dalam pengujian lokal dengan modul cache IndexedDB. Berikan vote Anda jika fitur ini prioritas bagi Anda.",
+        "createdAt": 1789836848208
+      }
+    ]
+  }
+]

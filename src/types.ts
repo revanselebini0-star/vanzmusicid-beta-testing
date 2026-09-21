@@ -65,6 +65,6 @@ export interface AdminMessage {
   authorEmail?: string;
 }
 
-export type ViewTab = 'listen_now' | 'playlist' | 'search' | 'recommendations' | 'radio' | 'account';
+export type ViewTab = 'listen_now' | 'playlist' | 'search' | 'recommendations' | 'radio' | 'account' | 'vanzupdate';
 
 export type RepeatMode = 'off' | 'all' | 'one';

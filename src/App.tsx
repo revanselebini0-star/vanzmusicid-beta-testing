@@ -10,6 +10,7 @@ import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
 import { LibraryView } from './components/views/LibraryView';
 import { AccountView } from './components/views/AccountView';
+import { VanzUpdateView } from './components/views/VanzUpdateView';
 import { Track } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -181,6 +182,18 @@ const AppContent: React.FC = () => {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
                 <AccountView />
+              </motion.div>
+            )}
+
+            {activeTab === 'vanzupdate' && (
+              <motion.div
+                key="vanzupdate"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                <VanzUpdateView />
               </motion.div>
             )}
           </AnimatePresence>

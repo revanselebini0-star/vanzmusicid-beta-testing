@@ -26,11 +26,16 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     signOutAction 
   } = usePlayer();
 
-  const navItems = [
-    { id: 'listen_now' as ViewTab, label: 'Beranda', icon: HomeIcon },
-    { id: 'search' as ViewTab, label: 'Cari', icon: Search },
-    { id: 'recommendations' as ViewTab, label: 'Rekomendasi', icon: RecommendationIcon },
-    { id: 'account' as ViewTab, label: 'Akun', icon: AccountIcon },
+  const navItems: { id: ViewTab; label: string; icon?: any; image?: string }[] = [
+    { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
+    { id: 'search', label: 'Cari', icon: Search },
+    { id: 'recommendations', label: 'Rekomendasi', icon: RecommendationIcon },
+    { 
+      id: 'vanzupdate', 
+      label: 'Vanz Update', 
+      image: 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png' 
+    },
+    { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 
   return (
@@ -66,7 +71,20 @@ export const Sidebar: React.FC<SidebarProps> = () => {
                     : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--theme-accent)]' : 'text-neutral-400'}`} />
+                {item.image ? (
+                  <div className={`w-4 h-4 rounded-full overflow-hidden shrink-0 ring-1 ${
+                    isActive ? 'ring-[var(--theme-accent)]' : 'ring-white/20'
+                  }`}>
+                    <img 
+                      src={item.image} 
+                      alt={item.label} 
+                      referrerPolicy="no-referrer" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                ) : (
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--theme-accent)]' : 'text-neutral-400'}`} />
+                )}
                 <span>{item.label}</span>
               </button>
             );
