@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { 
   ThumbsUp, 
@@ -16,36 +16,22 @@ import {
   User as UserIcon, 
   CornerDownRight, 
   X,
-  Radio
+  Radio,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  subscribeCommunityVotes,
+  toggleVoteItem,
+  createVoteItem,
+  addReplyToVote,
+  getLocalVotes,
+  type CommunityVoteItem,
+  type CommunityReply
+} from '../../lib/voteService';
 
 const VANZ_LOGO = 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png';
-
-export interface CommunityReply {
-  id: string;
-  authorName: string;
-  authorPhoto?: string;
-  authorEmail?: string;
-  userId: string;
-  content: string;
-  createdAt: number;
-}
-
-export interface CommunityVoteItem {
-  id: string;
-  title: string;
-  description?: string;
-  authorName: string;
-  authorPhoto?: string;
-  authorEmail?: string;
-  userId: string;
-  createdAt: number;
-  votes: number;
-  voters: string[];
-  status: 'Direncanakan' | 'Dalam Proses' | 'Selesai';
-  replies: CommunityReply[];
-}
 
 interface PatchHighlight {
   type: 'feature' | 'fix' | 'performance';
@@ -97,7 +83,7 @@ function formatExactDate(timestamp: number): string {
 }
 
 export const VanzUpdateView: React.FC = () => {
-  const { user, signInWithGoogleAction, isAuthLoading } = usePlayer();
+  const { user, signInWithGoogleAction, signInWithGuestProfile, isAuthLoading } = usePlayer();
 
   // Patch releases (Preserving user modifications)
   const releases: PatchRelease[] = [
@@ -130,9 +116,9 @@ export const VanzUpdateView: React.FC = () => {
     }
   ];
 
-  // Community Votes State (Real-time sync)
-  const [votesList, setVotesList] = useState<CommunityVoteItem[]>([]);
-  const [isLoadingVotes, setIsLoadingVotes] = useState(true);
+  // Community Votes State (Real-time sync via Firestore + LocalStorage + Server fallback)
+  const [votesList, setVotesList] = useState<CommunityVoteItem[]>(() => getLocalVotes());
+  const [isLoadingVotes, setIsLoadingVotes] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
@@ -144,108 +130,89 @@ export const VanzUpdateView: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginPromptReason, setLoginPromptReason] = useState<string>('untuk memberikan vote');
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+  const [authDomainError, setAuthDomainError] = useState<string | null>(null);
+  const [guestNameInput, setGuestNameInput] = useState<string>('');
+  const [showGuestLoginInput, setShowGuestLoginInput] = useState(false);
 
-  const isPollingRef = useRef(false);
-
-  // Fetch votes from server
-  const fetchVotes = async (isBackground = false) => {
-    if (!isBackground) setIsSyncing(true);
-    try {
-      const res = await fetch('/api/community-votes');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setVotesList(data);
-        }
-      }
-    } catch (e) {
-      console.warn('Real-time sync notice: using current local memory', e);
-    } finally {
-      setIsLoadingVotes(false);
-      if (!isBackground) setIsSyncing(false);
-    }
-  };
-
-  // Real-time polling effect (Every 4 seconds for sub-second community updates)
+  // Real-time synchronization subscription (works in GitHub Pages, Vercel, Netlify, Cloud Run)
   useEffect(() => {
-    fetchVotes(false);
+    const unsubscribe = subscribeCommunityVotes((updated) => {
+      setVotesList(updated);
+      setIsLoadingVotes(false);
+      setIsSyncing(false);
+    });
 
-    const interval = setInterval(() => {
-      if (!isPollingRef.current) {
-        isPollingRef.current = true;
-        fetchVotes(true).finally(() => {
-          isPollingRef.current = false;
-        });
-      }
-    }, 4000);
-
-    return () => clearInterval(interval);
+    return () => {
+      unsubscribe();
+    };
   }, []);
+
+  const handleManualRefresh = () => {
+    setIsSyncing(true);
+    const local = getLocalVotes();
+    setVotesList(local);
+    setTimeout(() => setIsSyncing(false), 400);
+  };
 
   const triggerLoginNotice = (actionText: string) => {
     setLoginPromptReason(actionText);
+    setAuthDomainError(null);
     setShowLoginModal(true);
   };
 
   const handleGoogleLogin = async () => {
+    setAuthDomainError(null);
     try {
       await signInWithGoogleAction();
       setShowLoginModal(false);
+      setShowGuestLoginInput(false);
       setFeedbackNotice('Berhasil masuk dengan akun Google!');
       setTimeout(() => setFeedbackNotice(null), 3000);
     } catch (err: any) {
       console.error('Login error:', err);
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+      if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
+        setAuthDomainError(window.location.hostname || 'domain hosting Anda');
+      } else if (errCode === 'auth/popup-blocked') {
+        setFeedbackNotice('Popup login terblokir oleh browser. Harap izinkan popup untuk login Google.');
+      } else if (errCode !== 'auth/popup-closed-by-user') {
+        setFeedbackNotice('Gagal masuk Google: ' + (errMsg || 'Coba lagi'));
+      }
     }
   };
 
-  // Handle Upvote / Unvote
+  const handleGuestLogin = () => {
+    if (!guestNameInput.trim()) return;
+    signInWithGuestProfile(guestNameInput.trim());
+    setShowLoginModal(false);
+    setAuthDomainError(null);
+    setShowGuestLoginInput(false);
+    setGuestNameInput('');
+    setFeedbackNotice(`Selamat datang, ${guestNameInput.trim()}!`);
+    setTimeout(() => setFeedbackNotice(null), 3000);
+  };
+
+  // Handle Upvote / Unvote (Works on GitHub Pages & static hosting seamlessly)
   const handleToggleVote = async (itemId: string) => {
     if (!user) {
       triggerLoginNotice('untuk memberikan vote pada usulan fitur');
       return;
     }
 
-    // Optimistic update
-    setVotesList((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const voters = Array.isArray(item.voters) ? [...item.voters] : [];
-          const hasVoted = voters.includes(user.uid);
-          const newVoters = hasVoted
-            ? voters.filter((id) => id !== user.uid)
-            : [...voters, user.uid];
-          return {
-            ...item,
-            votes: hasVoted ? Math.max(0, item.votes - 1) : item.votes + 1,
-            voters: newVoters
-          };
-        }
-        return item;
-      })
-    );
-
     try {
-      const res = await fetch(`/api/community-votes/${itemId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          authorName: user.displayName || user.email?.split('@')[0] || 'Pengguna'
-        })
-      });
-      if (res.ok) {
-        const updatedItem = await res.json();
-        setVotesList((prev) =>
-          prev.map((item) => (item.id === itemId ? updatedItem : item))
-        );
-      }
+      const updated = await toggleVoteItem(
+        itemId,
+        user.uid,
+        user.displayName || user.email?.split('@')[0] || 'Pengguna Vanz'
+      );
+      setVotesList(updated);
     } catch (e) {
       console.error('Failed to vote:', e);
-      fetchVotes(true); // Re-sync on failure
     }
   };
 
-  // Handle Create New Vote Post
+  // Handle Create New Vote Post (Works on GitHub Pages & static hosting seamlessly)
   const handleCreateVote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -257,28 +224,13 @@ export const VanzUpdateView: React.FC = () => {
     setIsSubmittingVote(true);
 
     try {
-      const res = await fetch('/api/community-votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          description: newDesc.trim(),
-          authorName: user.displayName || user.email?.split('@')[0] || 'Pengguna Vanz',
-          authorPhoto: user.photoURL || '',
-          authorEmail: user.email || '',
-          userId: user.uid
-        })
-      });
-
-      if (res.ok) {
-        const created = await res.json();
-        setVotesList((prev) => [created, ...prev]);
-        setNewTitle('');
-        setNewDesc('');
-        setShowSuggestForm(false);
-        setFeedbackNotice('Usulan vote berhasil dipublikasikan secara real-time!');
-        setTimeout(() => setFeedbackNotice(null), 3500);
-      }
+      const created = await createVoteItem(newTitle, newDesc, user);
+      setVotesList((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+      setNewTitle('');
+      setNewDesc('');
+      setShowSuggestForm(false);
+      setFeedbackNotice('Usulan vote berhasil dipublikasikan!');
+      setTimeout(() => setFeedbackNotice(null), 3500);
     } catch (e) {
       console.error('Error creating vote:', e);
     } finally {
@@ -286,7 +238,7 @@ export const VanzUpdateView: React.FC = () => {
     }
   };
 
-  // Handle Send Reply / Comment to a Vote Item
+  // Handle Send Reply / Comment to a Vote Item (Works on GitHub Pages & static hosting seamlessly)
   const handleSendReply = async (itemId: string) => {
     if (!user) {
       triggerLoginNotice('untuk membalas komentar atau ikut berdiskusi');
@@ -299,25 +251,9 @@ export const VanzUpdateView: React.FC = () => {
     setSubmittingReplyId(itemId);
 
     try {
-      const res = await fetch(`/api/community-votes/${itemId}/replies`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: replyContent,
-          authorName: user.displayName || user.email?.split('@')[0] || 'Pengguna Vanz',
-          authorPhoto: user.photoURL || '',
-          authorEmail: user.email || '',
-          userId: user.uid
-        })
-      });
-
-      if (res.ok) {
-        const updatedItem = await res.json();
-        setVotesList((prev) =>
-          prev.map((item) => (item.id === itemId ? updatedItem : item))
-        );
-        setReplyTextMap((prev) => ({ ...prev, [itemId]: '' }));
-      }
+      const updated = await addReplyToVote(itemId, replyContent, user);
+      setVotesList(updated);
+      setReplyTextMap((prev) => ({ ...prev, [itemId]: '' }));
     } catch (e) {
       console.error('Failed to submit reply:', e);
     } finally {
@@ -486,7 +422,7 @@ export const VanzUpdateView: React.FC = () => {
 
             <div className="flex items-center gap-1.5">
               <button
-                onClick={() => fetchVotes(false)}
+                onClick={handleManualRefresh}
                 disabled={isSyncing}
                 title="Sinkronisasi data terbaru"
                 className="p-1.5 sm:p-2 rounded-full text-neutral-400 hover:text-white hover:bg-white/[0.06] active:bg-white/10 transition-colors"
@@ -879,9 +815,68 @@ export const VanzUpdateView: React.FC = () => {
                   <span>{isAuthLoading ? 'Memproses Login...' : 'Masuk dengan Akun Google'}</span>
                 </button>
 
+                {authDomainError && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left space-y-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Domain Hosting Belum Diizinkan</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-300 leading-relaxed">
+                      Domain <code className="px-1 py-0.5 rounded bg-black/50 text-amber-300 font-mono">{authDomainError}</code> belum didaftarkan di Firebase Console Authentication.
+                    </p>
+                    <p className="text-[10px] text-neutral-400">
+                      Tambahkan domain ini di <strong>Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains</strong> untuk mengaktifkan login Google di hosting Anda.
+                    </p>
+                  </div>
+                )}
+
+                {/* Alternative Quick Guest Entry for Testing on Hosting / GitHub */}
+                {!showGuestLoginInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowGuestLoginInput(true)}
+                    className="w-full py-2 text-[11px] text-neutral-400 hover:text-white transition-colors"
+                  >
+                    Atau masuk langsung dengan Nama Akun (Testing Hosting)
+                  </button>
+                ) : (
+                  <div className="pt-2 border-t border-white/10 space-y-2 text-left">
+                    <label className="text-[11px] font-medium text-neutral-300">
+                      Nama Tampilan Anda:
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={guestNameInput}
+                        onChange={(e) => setGuestNameInput(e.target.value)}
+                        placeholder="Contoh: Revan atau Pendengar Musik"
+                        className="flex-1 py-2 px-3 rounded-xl bg-black/40 border border-white/15 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[var(--theme-accent)]"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleGuestLogin();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGuestLogin}
+                        disabled={!guestNameInput.trim()}
+                        className="py-2 px-3 rounded-xl bg-[var(--theme-accent)] text-white font-semibold text-xs disabled:opacity-50 transition-all active:scale-95 shrink-0"
+                      >
+                        Masuk
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setShowLoginModal(false)}
-                  className="w-full py-2 text-xs text-neutral-400 hover:text-white"
+                  onClick={() => {
+                    setShowLoginModal(false);
+                    setAuthDomainError(null);
+                    setShowGuestLoginInput(false);
+                  }}
+                  className="w-full py-2 text-xs text-neutral-400 hover:text-white transition-colors"
                 >
                   Nanti Saja
                 </button>

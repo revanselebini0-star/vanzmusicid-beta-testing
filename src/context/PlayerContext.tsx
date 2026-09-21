@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { LyricLine, LyricsResult, Playlist, RepeatMode, Track, ViewTab } from '../types';
+import { LyricLine, LyricsResult, Playlist, RepeatMode, Track, UserProfile, ViewTab } from '../types';
 import { 
   getLocalFavorites, 
   getLocalPlaylists, 
@@ -72,10 +72,11 @@ interface PlayerContextType {
   themeMode: 'dark' | 'light' | 'system';
   setThemeMode: (mode: 'dark' | 'light' | 'system') => void;
 
-  // Firebase Auth
-  user: User | null;
+  // Firebase Auth & Local Profile
+  user: User | UserProfile | null;
   isAuthLoading: boolean;
   signInWithGoogleAction: () => Promise<void>;
+  signInWithGuestProfile: (name: string, email?: string) => void;
   signOutAction: () => Promise<void>;
 
   // Player Container Ref for embedded YouTube iframe
@@ -201,14 +202,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setThemeMode(next);
   };
 
-  // Firebase Auth state
-  const [user, setUser] = useState<User | null>(null);
+  // Firebase Auth state & Local Profile fallback
+  const [user, setUser] = useState<User | UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('vanz_auth_local_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // Initialize Firebase Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        try {
+          localStorage.removeItem('vanz_auth_local_user');
+        } catch {}
+      } else {
+        try {
+          const saved = localStorage.getItem('vanz_auth_local_user');
+          if (saved) {
+            setUser(JSON.parse(saved));
+          } else {
+            setUser(null);
+          }
+        } catch {
+          setUser(null);
+        }
+      }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
@@ -216,15 +239,34 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const signInWithGoogleAction = async () => {
     try {
-      await loginWithGoogle();
+      const u = await loginWithGoogle();
+      if (u) {
+        setUser(u);
+      }
     } catch (err: any) {
       console.error("Google sign in failed:", err);
+      throw err;
     }
+  };
+
+  const signInWithGuestProfile = (name: string, email?: string) => {
+    const guestUser: UserProfile = {
+      uid: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      displayName: name.trim() || 'Pengguna Vanz',
+      email: email?.trim() || null,
+      photoURL: null
+    };
+    setUser(guestUser);
+    try {
+      localStorage.setItem('vanz_auth_local_user', JSON.stringify(guestUser));
+    } catch {}
   };
 
   const signOutAction = async () => {
     try {
+      localStorage.removeItem('vanz_auth_local_user');
       await logoutUser();
+      setUser(null);
     } catch (err) {
       console.error("Sign out failed:", err);
     }
@@ -737,6 +779,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         user,
         isAuthLoading,
         signInWithGoogleAction,
+        signInWithGuestProfile,
         signOutAction,
 
         ytContainerId,
