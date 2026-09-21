@@ -1,8 +1,12 @@
 {
   "rewrites": [
     {
+      "source": "/(sitemap\.xml|googled14c0fe73d8867a5\.html)",
+      "destination": "/$1"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/index.html"
     }
   ]
 }
