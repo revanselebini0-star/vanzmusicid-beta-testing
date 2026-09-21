@@ -34,6 +34,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { formatAuthError } from '../../lib/firebase';
 import { AdminLikeBoosterModal } from '../AdminLikeBoosterModal';
+import { AdminVerifiedBadge } from '../AdminVerifiedBadge';
 import { ADMIN_EMAIL } from '../../lib/songLikeService';
 
 const PRESET_AVATARS = [
@@ -322,13 +323,10 @@ export const AccountView: React.FC = () => {
                     <h3 className="text-base sm:text-lg font-bold text-white truncate">
                       {user.displayName || 'Pengguna Vanz'}
                     </h3>
-                    <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)] shrink-0" />
-                    
-                    {isAdmin && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-black shadow-md shadow-amber-500/20">
-                        <Crown className="w-3 h-3 fill-current" />
-                        Admin & Owner
-                      </span>
+                    {isAdmin ? (
+                      <AdminVerifiedBadge className="w-4 h-4 text-white shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)] shrink-0" />
                     )}
                   </div>
                   <p className="text-xs text-neutral-400 truncate">

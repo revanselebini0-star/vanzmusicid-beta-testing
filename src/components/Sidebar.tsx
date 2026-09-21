@@ -9,6 +9,7 @@ import {
   Music2
 } from 'lucide-react';
 import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
+import { AdminVerifiedBadge } from './AdminVerifiedBadge';
 import { ViewTab } from '../types';
 
 interface SidebarProps {
@@ -20,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     activeTab, 
     setActiveTab, 
     user, 
+    isAdmin,
     signOutAction 
   } = usePlayer();
 
@@ -119,8 +121,11 @@ export const Sidebar: React.FC<SidebarProps> = () => {
                   {user.displayName?.[0] || 'U'}
                 </div>
               )}
-              <span className="text-xs text-white truncate flex-1 font-medium">
-                {user.displayName || user.email?.split('@')[0]}
+              <span className="text-xs text-white truncate flex-1 font-medium flex items-center gap-1">
+                <span className="truncate">{user.displayName || user.email?.split('@')[0]}</span>
+                {isAdmin && (
+                  <AdminVerifiedBadge className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                )}
               </span>
             </button>
             <button

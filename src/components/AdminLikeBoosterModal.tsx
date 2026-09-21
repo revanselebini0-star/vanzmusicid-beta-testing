@@ -40,6 +40,7 @@ import {
   type CommunityReply
 } from '../lib/voteService';
 import { FALLBACK_TRENDING_TRACKS, searchYouTubeMusic } from '../lib/youtube';
+import { AdminVerifiedBadge } from './AdminVerifiedBadge';
 
 export type AdminBoosterTab = 'voting' | 'comments' | 'song';
 
@@ -388,8 +389,9 @@ export const AdminLikeBoosterModal: React.FC<AdminLikeBoosterModalProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-sm font-black text-white tracking-tight">Admin Booster Center</h3>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black">
-                  👑 Owner
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black shadow-sm">
+                  <AdminVerifiedBadge className="w-3 h-3 text-black fill-current" />
+                  Owner & Admin
                 </span>
               </div>
               <p className="text-[11px] text-amber-300/80 font-medium">

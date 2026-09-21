@@ -35,6 +35,8 @@ import {
   type VoteSyncStatus
 } from '../../lib/voteService';
 import { AdminLikeBoosterModal, type AdminBoosterTab } from '../AdminLikeBoosterModal';
+import { AdminVerifiedBadge } from '../AdminVerifiedBadge';
+import { ADMIN_EMAIL } from '../../lib/songLikeService';
 
 const VANZ_LOGO = 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png';
 
@@ -710,10 +712,8 @@ export const VanzUpdateView: React.FC = () => {
                           <span className="text-neutral-300 font-medium truncate max-w-[120px] sm:max-w-[140px]">
                             {item.authorName}
                           </span>
-                          {(item.authorEmail === 'revan.seleb.ini0@gmail.com' || item.userId === 'admin-vanz' || item.authorName.toLowerCase().includes('admin')) && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 shrink-0">
-                              Admin
-                            </span>
+                          {(item.authorEmail === ADMIN_EMAIL || item.authorEmail === 'revan.seleb.ini0@gmail.com' || item.userId === 'admin-vanz' || item.authorName.toLowerCase().includes('admin')) && (
+                            <AdminVerifiedBadge className="w-3.5 h-3.5 text-white shrink-0" />
                           )}
                         </div>
 
@@ -781,7 +781,7 @@ export const VanzUpdateView: React.FC = () => {
                         {repliesCount > 0 ? (
                           <div className="space-y-2.5">
                             {item.replies.map((reply) => {
-                              const isAdmin = reply.authorEmail === 'revan.seleb.ini0@gmail.com' || reply.userId === 'admin-vanz' || reply.authorName.toLowerCase().includes('admin');
+                              const isReplyAdmin = reply.authorEmail === ADMIN_EMAIL || reply.authorEmail === 'revan.seleb.ini0@gmail.com' || reply.userId === 'admin-vanz' || reply.authorName.toLowerCase().includes('admin');
                               return (
                                 <div key={reply.id} className="text-xs space-y-1 text-left">
                                   <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] flex-wrap">
@@ -800,10 +800,8 @@ export const VanzUpdateView: React.FC = () => {
                                     <span className="font-semibold text-neutral-200 truncate max-w-[120px]">
                                       {reply.authorName}
                                     </span>
-                                    {isAdmin && (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] border border-[var(--theme-accent)]/30 shrink-0">
-                                        Admin
-                                      </span>
+                                    {isReplyAdmin && (
+                                      <AdminVerifiedBadge className="w-3.5 h-3.5 text-white shrink-0" />
                                     )}
                                     <span className="text-neutral-600">•</span>
                                     <span title={formatExactDate(reply.createdAt)} className="text-neutral-500 shrink-0">
