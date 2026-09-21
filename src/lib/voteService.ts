@@ -2,12 +2,8 @@ import { db } from './firebase';
 import { 
   collection, 
   doc, 
-  getDocs, 
   setDoc, 
-  updateDoc, 
-  onSnapshot,
-  query, 
-  orderBy 
+  onSnapshot
 } from 'firebase/firestore';
 
 export interface CommunityReply {
@@ -34,6 +30,8 @@ export interface CommunityVoteItem {
   status: 'Direncanakan' | 'Dalam Proses' | 'Selesai';
   replies: CommunityReply[];
 }
+
+export type VoteSyncStatus = 'cloud_live' | 'permission_denied' | 'local_fallback';
 
 const STORAGE_KEY = 'vanz_community_votes_v2';
 
@@ -112,51 +110,89 @@ export function saveLocalVotes(votes: CommunityVoteItem[]): void {
   }
 }
 
-// Subscribe to votes in real time (tries Firestore -> falls back to Server API / LocalStorage)
+let currentSyncStatus: VoteSyncStatus = 'local_fallback';
+let currentStatusListener: ((status: VoteSyncStatus, msg?: string) => void) | null = null;
+
+export function setStatusListener(listener: (status: VoteSyncStatus, msg?: string) => void) {
+  currentStatusListener = listener;
+  listener(currentSyncStatus);
+}
+
+function updateStatus(status: VoteSyncStatus, msg?: string) {
+  currentSyncStatus = status;
+  if (currentStatusListener) {
+    currentStatusListener(status, msg);
+  }
+}
+
+// Subscribe to votes in real time (Firestore syncs between all devices & users worldwide)
 export function subscribeCommunityVotes(
-  onUpdate: (votes: CommunityVoteItem[]) => void
+  onUpdate: (votes: CommunityVoteItem[]) => void,
+  onStatus?: (status: VoteSyncStatus, message?: string) => void
 ): () => void {
   let isUnsubscribed = false;
   let unsubscribeFirestore: (() => void) | null = null;
 
-  // 1. First immediately emit local votes so UI is instant and never empty
+  if (onStatus) {
+    setStatusListener(onStatus);
+  }
+
+  // 1. Instantly emit local votes so the UI is immediate
   onUpdate(getLocalVotes());
 
-  // 2. Try Firestore real-time listener (works on GitHub Pages & static hosting directly)
+  // 2. Real-time listener from Firestore
   try {
     const votesCollection = collection(db, 'community_votes');
-    const q = query(votesCollection, orderBy('createdAt', 'desc'));
 
     unsubscribeFirestore = onSnapshot(
-      q,
+      votesCollection,
       (snapshot) => {
         if (isUnsubscribed) return;
+        updateStatus('cloud_live');
+
         if (!snapshot.empty) {
           const items: CommunityVoteItem[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data() as CommunityVoteItem;
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
             items.push({
-              ...data,
-              id: doc.id,
+              id: docSnap.id,
+              title: data.title || '',
+              description: data.description || '',
+              authorName: data.authorName || 'Pengguna Vanz',
+              authorPhoto: data.authorPhoto || '',
+              authorEmail: data.authorEmail || '',
+              userId: data.userId || '',
+              createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+              votes: typeof data.votes === 'number' ? data.votes : 1,
               voters: Array.isArray(data.voters) ? data.voters : [],
+              status: data.status || 'Direncanakan',
               replies: Array.isArray(data.replies) ? data.replies : []
             });
           });
+
+          // Sort descending by createdAt
+          items.sort((a, b) => b.createdAt - a.createdAt);
           saveLocalVotes(items);
           onUpdate(items);
         } else {
-          // If Firestore collection is empty, seed with DEFAULT_COMMUNITY_VOTES
+          // If collection in Firestore is completely new, seed default items
           seedDefaultVotesToFirestore();
         }
       },
       (error) => {
-        // Firestore rules or offline: fallback to Server API polling or local storage
-        console.info('Firestore subscription notice (using server API / local cache):', error.message);
+        const isPerm = error.code === 'permission-denied' || error.message.includes('permission');
+        console.warn('Firestore subscription status:', error.code, error.message);
+        if (isPerm) {
+          updateStatus('permission_denied', 'Aturan Firestore belum dibuka di Firebase Console');
+        } else {
+          updateStatus('local_fallback', error.message);
+        }
         fallbackPollApi(onUpdate);
       }
     );
-  } catch (e) {
-    console.warn('Firestore initialization failed:', e);
+  } catch (e: any) {
+    console.warn('Firestore initialization error:', e);
+    updateStatus('local_fallback');
     fallbackPollApi(onUpdate);
   }
 
@@ -168,7 +204,6 @@ export function subscribeCommunityVotes(
   };
 }
 
-// Fallback polling for Express server (if running) or local cache
 async function fallbackPollApi(onUpdate: (votes: CommunityVoteItem[]) => void) {
   try {
     const res = await fetch('/api/community-votes');
@@ -181,23 +216,50 @@ async function fallbackPollApi(onUpdate: (votes: CommunityVoteItem[]) => void) {
       }
     }
   } catch {
-    // Expected on static hosting (GitHub Pages) where /api doesn't exist
+    // Static hosting (Vercel)
   }
   onUpdate(getLocalVotes());
 }
 
-// Seed default votes to Firestore if empty
 async function seedDefaultVotesToFirestore() {
   try {
     for (const item of DEFAULT_COMMUNITY_VOTES) {
-      await setDoc(doc(db, 'community_votes', item.id), item, { merge: true });
+      await setDoc(doc(db, 'community_votes', item.id), sanitizeVoteForFirestore(item), { merge: true });
     }
   } catch (e) {
-    // If permission denied, no problem: local votes are already active
+    console.info('Seeding default votes to Firestore note:', e);
   }
 }
 
-// Toggle Upvote / Unvote (Works on GitHub Pages, Cloud Run, Localhost)
+// Convert any undefined fields into empty strings so Firestore setDoc never throws
+function sanitizeVoteForFirestore(item: any): any {
+  return {
+    id: item.id || '',
+    title: item.title || '',
+    description: item.description || '',
+    authorName: item.authorName || 'Pengguna Vanz',
+    authorPhoto: item.authorPhoto || '',
+    authorEmail: item.authorEmail || '',
+    userId: item.userId || 'guest',
+    createdAt: item.createdAt || Date.now(),
+    votes: typeof item.votes === 'number' ? item.votes : 1,
+    voters: Array.isArray(item.voters) ? item.voters : [],
+    status: item.status || 'Direncanakan',
+    replies: Array.isArray(item.replies)
+      ? item.replies.map((r: any) => ({
+          id: r.id || '',
+          authorName: r.authorName || 'Pengguna Vanz',
+          authorPhoto: r.authorPhoto || '',
+          authorEmail: r.authorEmail || '',
+          userId: r.userId || 'guest',
+          content: r.content || '',
+          createdAt: r.createdAt || Date.now()
+        }))
+      : []
+  };
+}
+
+// Toggle Upvote / Unvote (Syncs to Firestore for all users + saves locally)
 export async function toggleVoteItem(
   itemId: string,
   userId: string,
@@ -224,20 +286,24 @@ export async function toggleVoteItem(
     return item;
   });
 
-  // 1. Immediately persist locally (Guarantees vote is never lost on GitHub Pages!)
+  // 1. Immediately save locally for instantaneous response
   saveLocalVotes(updatedVotes);
 
-  // 2. Sync with Firestore (for real-time multi-user synchronization on GitHub Pages)
+  // 2. Broadcast to Cloud Firestore (makes it visible to ALL other users on Vercel)
   if (updatedItem) {
     try {
-      const voteRef = doc(db, 'community_votes', itemId);
-      await setDoc(voteRef, updatedItem, { merge: true });
-    } catch (e) {
-      console.info('Firestore sync info (vote saved locally):', e);
+      const sanitized = sanitizeVoteForFirestore(updatedItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      updateStatus('cloud_live');
+    } catch (e: any) {
+      console.warn('Firestore vote write error:', e);
+      if (e.code === 'permission-denied') {
+        updateStatus('permission_denied', 'Aturan Firestore belum dibuka');
+      }
     }
   }
 
-  // 3. Also try Express server API if running in full-stack container
+  // 3. Optional Express API
   try {
     await fetch(`/api/community-votes/${itemId}/vote`, {
       method: 'POST',
@@ -245,13 +311,13 @@ export async function toggleVoteItem(
       body: JSON.stringify({ userId, authorName: userName })
     });
   } catch {
-    // Static hosting has no server, safe to ignore
+    // Vercel static
   }
 
   return updatedVotes;
 }
 
-// Create New Vote Suggestion (Works on GitHub Pages, Cloud Run, Localhost)
+// Create New Vote Item (Broadcasts to Cloud Firestore so ALL users see it)
 export async function createVoteItem(
   title: string,
   description: string,
@@ -260,10 +326,10 @@ export async function createVoteItem(
   const newItem: CommunityVoteItem = {
     id: `vote-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
     title: title.trim(),
-    description: description.trim() || undefined,
+    description: description.trim() || '',
     authorName: user.displayName || user.email?.split('@')[0] || 'Pengguna Vanz',
-    authorPhoto: user.photoURL || undefined,
-    authorEmail: user.email || undefined,
+    authorPhoto: user.photoURL || '',
+    authorEmail: user.email || '',
     userId: user.uid,
     createdAt: Date.now(),
     votes: 1,
@@ -274,18 +340,21 @@ export async function createVoteItem(
 
   const current = getLocalVotes();
   const updatedVotes = [newItem, ...current.filter((i) => i.id !== newItem.id)];
-  
-  // 1. Save locally
   saveLocalVotes(updatedVotes);
 
-  // 2. Sync with Firestore
+  // Broadcast to Cloud Firestore
   try {
-    await setDoc(doc(db, 'community_votes', newItem.id), newItem);
-  } catch (e) {
-    console.info('Firestore sync info (vote suggestion saved locally):', e);
+    const sanitized = sanitizeVoteForFirestore(newItem);
+    await setDoc(doc(db, 'community_votes', newItem.id), sanitized);
+    updateStatus('cloud_live');
+  } catch (e: any) {
+    console.warn('Firestore create vote error:', e);
+    if (e.code === 'permission-denied') {
+      updateStatus('permission_denied', 'Aturan Firestore belum dibuka');
+    }
   }
 
-  // 3. Try Express API
+  // Express API
   try {
     await fetch('/api/community-votes', {
       method: 'POST',
@@ -293,13 +362,13 @@ export async function createVoteItem(
       body: JSON.stringify(newItem)
     });
   } catch {
-    // Static hosting
+    // Vercel static
   }
 
   return newItem;
 }
 
-// Add Reply to Vote (Works on GitHub Pages, Cloud Run, Localhost)
+// Add Reply to Vote (Broadcasts to Cloud Firestore so ALL users see it)
 export async function addReplyToVote(
   itemId: string,
   content: string,
@@ -308,8 +377,8 @@ export async function addReplyToVote(
   const reply: CommunityReply = {
     id: `rep-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
     authorName: user.displayName || user.email?.split('@')[0] || 'Pengguna Vanz',
-    authorPhoto: user.photoURL || undefined,
-    authorEmail: user.email || undefined,
+    authorPhoto: user.photoURL || '',
+    authorEmail: user.email || '',
     userId: user.uid,
     content: content.trim(),
     createdAt: Date.now()
@@ -327,19 +396,23 @@ export async function addReplyToVote(
     return item;
   });
 
-  // 1. Save locally
   saveLocalVotes(updatedVotes);
 
-  // 2. Sync with Firestore
+  // Broadcast to Cloud Firestore
   if (updatedTargetItem) {
     try {
-      await setDoc(doc(db, 'community_votes', itemId), updatedTargetItem, { merge: true });
-    } catch (e) {
-      console.info('Firestore sync info (reply saved locally):', e);
+      const sanitized = sanitizeVoteForFirestore(updatedTargetItem);
+      await setDoc(doc(db, 'community_votes', itemId), sanitized, { merge: true });
+      updateStatus('cloud_live');
+    } catch (e: any) {
+      console.warn('Firestore reply write error:', e);
+      if (e.code === 'permission-denied') {
+        updateStatus('permission_denied', 'Aturan Firestore belum dibuka');
+      }
     }
   }
 
-  // 3. Try Express API
+  // Express API
   try {
     await fetch(`/api/community-votes/${itemId}/replies`, {
       method: 'POST',
@@ -347,7 +420,7 @@ export async function addReplyToVote(
       body: JSON.stringify(reply)
     });
   } catch {
-    // Static hosting
+    // Vercel static
   }
 
   return updatedVotes;

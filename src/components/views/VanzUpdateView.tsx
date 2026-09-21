@@ -28,7 +28,8 @@ import {
   addReplyToVote,
   getLocalVotes,
   type CommunityVoteItem,
-  type CommunityReply
+  type CommunityReply,
+  type VoteSyncStatus
 } from '../../lib/voteService';
 
 const VANZ_LOGO = 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png';
@@ -133,14 +134,20 @@ export const VanzUpdateView: React.FC = () => {
   const [authDomainError, setAuthDomainError] = useState<string | null>(null);
   const [guestNameInput, setGuestNameInput] = useState<string>('');
   const [showGuestLoginInput, setShowGuestLoginInput] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<VoteSyncStatus>('cloud_live');
 
   // Real-time synchronization subscription (works in GitHub Pages, Vercel, Netlify, Cloud Run)
   useEffect(() => {
-    const unsubscribe = subscribeCommunityVotes((updated) => {
-      setVotesList(updated);
-      setIsLoadingVotes(false);
-      setIsSyncing(false);
-    });
+    const unsubscribe = subscribeCommunityVotes(
+      (updated) => {
+        setVotesList(updated);
+        setIsLoadingVotes(false);
+        setIsSyncing(false);
+      },
+      (status) => {
+        setSyncStatus(status);
+      }
+    );
 
     return () => {
       unsubscribe();
@@ -414,10 +421,23 @@ export const VanzUpdateView: React.FC = () => {
               <h2 className="text-sm sm:text-lg font-bold text-white tracking-tight">
                 Vote Komunitas Realtime
               </h2>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live
-              </span>
+              {syncStatus === 'cloud_live' && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Cloud Realtime
+                </span>
+              )}
+              {syncStatus === 'permission_denied' && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  Mode Lokal (Rules Terkunci)
+                </span>
+              )}
+              {syncStatus === 'local_fallback' && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-neutral-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                  Lokal
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -431,6 +451,18 @@ export const VanzUpdateView: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {syncStatus === 'permission_denied' && (
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-neutral-300 space-y-1">
+              <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Agar vote orang lain terlihat: Buka Rules Firestore di Firebase Console</span>
+              </div>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Database Firestore di Firebase Console Anda belum mengizinkan akses publik. Buka <strong>Firebase Console &gt; Cloud Firestore &gt; Rules</strong> lalu izinkan read & write pada <code className="text-amber-300 font-mono">community_votes</code>.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] sm:text-xs text-neutral-400 flex-1 pr-2">
