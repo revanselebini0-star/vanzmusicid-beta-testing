@@ -2,7 +2,6 @@ import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { 
   Search, 
-  Bot,
   ExternalLink,
   LogIn, 
   LogOut,
@@ -21,8 +20,6 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     activeTab, 
     setActiveTab, 
     user, 
-    isAuthLoading, 
-    signInWithGoogleAction, 
     signOutAction 
   } = usePlayer();
 
@@ -42,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     <aside className="hidden lg:flex w-56 shrink-0 h-screen bg-[#1c1c1e] text-neutral-300 flex-col justify-between p-4 select-none border-r border-white/5 font-sans z-20">
       {/* Top Section: Logo & Nav items */}
       <div className="space-y-6">
-        {/* Brand Header: Music icon + Music (No Apple Logo) */}
+        {/* Brand Header */}
         <div 
           onClick={() => setActiveTab('listen_now')}
           className="flex items-center gap-2 px-3 pt-2 cursor-pointer group"
@@ -103,27 +100,32 @@ export const Sidebar: React.FC<SidebarProps> = () => {
           <span>Buka di Musik</span>
         </button>
 
-        {/* Masuk / Login Button */}
+        {/* Masuk / Login Profile Widget */}
         {user ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/5">
+            <button
+              onClick={() => setActiveTab('account')}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-left"
+            >
               {user.photoURL ? (
                 <img 
                   src={user.photoURL} 
                   alt={user.displayName || 'User'} 
                   referrerPolicy="no-referrer"
-                  className="w-6 h-6 rounded-full"
+                  className="w-6 h-6 rounded-full object-cover border border-[var(--theme-accent)]"
                 />
               ) : (
-                <UserIcon className="w-4 h-4 text-neutral-400" />
+                <div className="w-6 h-6 rounded-full bg-[var(--theme-accent)] flex items-center justify-center text-[10px] font-bold text-white">
+                  {user.displayName?.[0] || 'U'}
+                </div>
               )}
               <span className="text-xs text-white truncate flex-1 font-medium">
                 {user.displayName || user.email?.split('@')[0]}
               </span>
-            </div>
+            </button>
             <button
               onClick={signOutAction}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-md bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-300 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-300 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Keluar</span>
@@ -131,12 +133,11 @@ export const Sidebar: React.FC<SidebarProps> = () => {
           </div>
         ) : (
           <button
-            onClick={signInWithGoogleAction}
-            disabled={isAuthLoading}
+            onClick={() => setActiveTab('account')}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-[var(--theme-accent)] hover:opacity-90 text-white text-xs font-bold shadow-md shadow-[var(--theme-glow)] transition-colors"
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Masuk</span>
+            <span>Masuk / Akun</span>
           </button>
         )}
       </div>

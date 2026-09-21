@@ -89,12 +89,39 @@ export const VanzUpdateView: React.FC = () => {
   // Patch releases (Preserving user modifications)
   const releases: PatchRelease[] = [
     {
+      id: '2.6.0 Beta',
+      version: 'v2.6.0 Beta Testing',
+      releaseDate: '21 September 2026',
+      title: 'Sistem Akun Mandiri, Kustomisasi Profil & Isolasi Playlist',
+      tag: 'Major',
+      isLatest: true,
+      summary: 'Pembaruan besar sistem autentikasi dan manajemen perpustakaan musik: setiap akun kini memiliki riwayat putar, favorit, dan playlist terpisah yang tersinkronisasi ke cloud, disertai fitur kustomisasi foto profil dan nama pengguna.',
+      highlights: [
+        {
+          type: 'feature',
+          text: 'Pendaftaran dan login mandiri dengan Email & Kata Sandi, di samping opsi Masuk Cepat Google dan Profil Tamu.'
+        },
+        {
+          type: 'feature',
+          text: 'Kustomisasi identitas profil: ubah nama tampilan dan pilih foto profil dari galeri avatar musik, unggah file foto dari galeri HP, atau masukkan tautan URL.'
+        },
+        {
+          type: 'feature',
+          text: 'Isolasi data antar akun: Riwayat pemutaran musik, playlist kustom, dan daftar lagu favorit kini terpisah dan tersimpan khusus sesuai akun yang sedang aktif.'
+        },
+        {
+          type: 'performance',
+          text: 'Sinkronisasi offline-first dengan Firebase Firestore persistent cache + IndexedDB untuk pemutaran tanpa gangguan meski tanpa koneksi internet.'
+        }
+      ]
+    },
+    {
       id: '2.5.0 Beta',
       version: 'v2.5.0 Beta Testing',
       releaseDate: '20 September 2026',
       title: 'Dark Liquid Glass Navigation & Responsive Dock',
       tag: 'Patch',
-      isLatest: true,
+      isLatest: false,
       summary: 'Pembaruan antarmuka navigasi mobile bergaya kaca gelap transparan (*Dark Liquid Glass*) yang menyatu anggun dengan konten musik, disertai responsivitas auto-hide yang mulus.',
       highlights: [
         {

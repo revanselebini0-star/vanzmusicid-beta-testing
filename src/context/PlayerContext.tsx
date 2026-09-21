@@ -1,20 +1,36 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { LyricLine, LyricsResult, Playlist, RepeatMode, Track, UserProfile, ViewTab } from '../types';
 import { 
-  getLocalFavorites, 
-  getLocalPlaylists, 
-  saveLocalPlaylist, 
-  deleteLocalPlaylist, 
-  toggleLocalFavorite, 
-  addTrackToPlaylist, 
-  removeTrackFromPlaylist,
-  getLocalHistory,
-  addLocalHistory,
+  getUserFavorites, 
+  getUserPlaylists, 
+  saveUserPlaylist, 
+  deleteUserPlaylist, 
+  toggleUserFavorite, 
+  addTrackToUserPlaylist, 
+  removeTrackFromUserPlaylist,
+  getUserHistory,
+  addUserHistory,
   cacheTrackForOffline
 } from '../lib/indexedDB';
 import { FALLBACK_TRENDING_TRACKS } from '../lib/youtube';
 import { fetchRealTrackLyrics } from '../lib/lyricsService';
-import { auth, loginWithGoogle, logoutUser, onAuthStateChanged, User } from '../lib/firebase';
+import { 
+  auth, 
+  loginWithGoogle, 
+  registerWithEmailPassword,
+  loginWithEmailPassword,
+  updateUserProfileData,
+  getUserProfileFromFirestore,
+  logoutUser, 
+  onAuthStateChanged, 
+  User 
+} from '../lib/firebase';
+import { 
+  isUserAdmin, 
+  adminBoostSongLikes, 
+  toggleSongLikeCount, 
+  ADMIN_EMAIL 
+} from '../lib/songLikeService';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -52,7 +68,7 @@ interface PlayerContextType {
   setVideoMode: (mode: boolean) => void;
   addToQueue: (track: Track) => void;
 
-  // Personal Library & Playlists (IndexedDB)
+  // Personal Library & Playlists (Isolated per Account & Synced)
   favorites: Track[];
   isFavorite: (trackId: string) => boolean;
   toggleFavoriteAction: (track: Track) => Promise<void>;
@@ -72,12 +88,20 @@ interface PlayerContextType {
   themeMode: 'dark' | 'light' | 'system';
   setThemeMode: (mode: 'dark' | 'light' | 'system') => void;
 
-  // Firebase Auth & Local Profile
+  // Firebase Auth, Email/Password & Profile Customization
   user: User | UserProfile | null;
+  isAdmin: boolean;
+  adminEmail: string;
   isAuthLoading: boolean;
   signInWithGoogleAction: () => Promise<void>;
-  signInWithGuestProfile: (name: string, email?: string) => void;
+  registerWithEmailAction: (email: string, pass: string, displayName: string, photoURL?: string) => Promise<void>;
+  loginWithEmailAction: (email: string, pass: string) => Promise<void>;
+  updateUserProfileAction: (data: { displayName?: string; photoURL?: string }) => Promise<UserProfile>;
+  signInWithGuestProfile: (name: string, photoURL?: string) => void;
   signOutAction: () => Promise<void>;
+
+  // Special Admin Actions
+  boostSongLikesAction: (track: Track | { id: string; title: string; artist: string; thumbnail?: string }, amount: number) => Promise<{ success: boolean; newCount: number; message: string }>;
 
   // Player Container Ref for embedded YouTube iframe
   ytContainerId: string;
@@ -155,7 +179,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     document.documentElement.style.setProperty('--theme-glow', palette.glow);
   }, [currentTrack]);
 
-  // IndexedDB state
+  // Per-account Library State (Playlists, Favorites, and Play History)
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
@@ -212,11 +236,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
-  // Initialize Firebase Auth Listener
+  // Initialize Firebase Auth Listener & sync profile
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
+        let mergedUser: any = currentUser;
+        try {
+          const profile = await getUserProfileFromFirestore(currentUser.uid);
+          if (profile && (profile.displayName || profile.photoURL)) {
+            mergedUser = {
+              uid: currentUser.uid,
+              displayName: profile.displayName || currentUser.displayName,
+              email: currentUser.email,
+              photoURL: profile.photoURL || currentUser.photoURL
+            };
+          }
+        } catch {}
+        setUser(mergedUser);
         try {
           localStorage.removeItem('vanz_auth_local_user');
         } catch {}
@@ -237,11 +273,44 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => unsubscribe();
   }, []);
 
+  // Isolate and load Playlists, Favorites, and History per account
+  const currentUserId = user ? user.uid : 'guest';
+
+  const loadAccountData = useCallback(async (uid: string) => {
+    try {
+      const [favs, pl, hist] = await Promise.all([
+        getUserFavorites(uid),
+        getUserPlaylists(uid),
+        getUserHistory(uid)
+      ]);
+      setFavorites(favs);
+      setPlaylists(pl);
+      setHistory(hist);
+    } catch (err) {
+      console.warn("Failed to load user account library data:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccountData(currentUserId);
+  }, [currentUserId, loadAccountData]);
+
+  // ---------------- Authentication Actions ----------------
   const signInWithGoogleAction = async () => {
     try {
       const u = await loginWithGoogle();
       if (u) {
-        setUser(u);
+        const profile = await getUserProfileFromFirestore(u.uid);
+        if (profile && (profile.displayName || profile.photoURL)) {
+          setUser({
+            uid: u.uid,
+            displayName: profile.displayName || u.displayName,
+            email: u.email,
+            photoURL: profile.photoURL || u.photoURL
+          });
+        } else {
+          setUser(u);
+        }
       }
     } catch (err: any) {
       console.error("Google sign in failed:", err);
@@ -249,12 +318,54 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const signInWithGuestProfile = (name: string, email?: string) => {
+  const registerWithEmailAction = async (
+    email: string, 
+    pass: string, 
+    displayName: string, 
+    photoURL?: string
+  ) => {
+    try {
+      const u = await registerWithEmailPassword(email, pass, displayName, photoURL);
+      setUser(u);
+    } catch (err: any) {
+      console.error("Email register failed:", err);
+      throw err;
+    }
+  };
+
+  const loginWithEmailAction = async (email: string, pass: string) => {
+    try {
+      const u = await loginWithEmailPassword(email, pass);
+      const profile = await getUserProfileFromFirestore(u.uid);
+      if (profile && (profile.displayName || profile.photoURL)) {
+        setUser({
+          uid: u.uid,
+          displayName: profile.displayName || u.displayName,
+          email: u.email,
+          photoURL: profile.photoURL || u.photoURL
+        });
+      } else {
+        setUser(u);
+      }
+    } catch (err: any) {
+      console.error("Email login failed:", err);
+      throw err;
+    }
+  };
+
+  const updateUserProfileAction = async (data: { displayName?: string; photoURL?: string }): Promise<UserProfile> => {
+    if (!user) throw new Error('Silakan masuk terlebih dahulu untuk mengubah profil.');
+    const updated = await updateUserProfileData(user, data);
+    setUser((prev) => prev ? { ...prev, ...updated } : updated);
+    return updated;
+  };
+
+  const signInWithGuestProfile = (name: string, photoURL?: string) => {
     const guestUser: UserProfile = {
-      uid: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      displayName: name.trim() || 'Pengguna Vanz',
-      email: email?.trim() || null,
-      photoURL: null
+      uid: `guest-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      displayName: name.trim() || 'Pengguna Tamu',
+      email: null,
+      photoURL: photoURL || null
     };
     setUser(guestUser);
     try {
@@ -271,26 +382,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error("Sign out failed:", err);
     }
   };
-
-  // Load IndexedDB data on start
-  const loadLocalData = useCallback(async () => {
-    try {
-      const [favs, pl, hist] = await Promise.all([
-        getLocalFavorites(),
-        getLocalPlaylists(),
-        getLocalHistory()
-      ]);
-      setFavorites(favs);
-      setPlaylists(pl);
-      setHistory(hist);
-    } catch (err) {
-      console.error("Failed to load local DB data:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadLocalData();
-  }, [loadLocalData]);
 
   // Load YouTube IFrame API script
   useEffect(() => {
@@ -340,7 +431,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             onError: (err: any) => {
               console.warn("YouTube Player error:", err);
               setIsBuffering(false);
-              // Auto advance on unplayable video
               setTimeout(() => playNext(), 1500);
             }
           }
@@ -359,19 +449,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
-  // Time progress poller
   const startProgressTimer = () => {
     stopProgressTimer();
     progressTimerRef.current = setInterval(() => {
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
-        try {
-          const cur = ytPlayerRef.current.getCurrentTime() || 0;
-          const dur = ytPlayerRef.current.getDuration() || 0;
-          setCurrentTime(cur);
-          if (dur > 0) setDuration(dur);
-        } catch {
-          // ignore
-        }
+        const cur = ytPlayerRef.current.getCurrentTime() || 0;
+        const dur = ytPlayerRef.current.getDuration() || 0;
+        setCurrentTime(cur);
+        if (dur > 0) setDuration(dur);
       }
     }, 250);
   };
@@ -383,109 +468,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // Background play & WakeLock / Visibility change handling
-  useEffect(() => {
-    let wakeLock: any = null;
-
-    const requestWakeLock = async () => {
-      if (isPlaying && 'wakeLock' in navigator) {
-        try {
-          wakeLock = await (navigator as any).wakeLock.request('screen');
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    if (isPlaying) {
-      requestWakeLock();
-    }
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isPlaying && ytPlayerRef.current) {
-        try {
-          ytPlayerRef.current.playVideo?.();
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (wakeLock) {
-        wakeLock.release().catch(() => {});
-      }
-    };
-  }, [isPlaying]);
-
-  // MediaSession API setup for Background & Lock Screen Control
-  useEffect(() => {
-    if ('mediaSession' in navigator && currentTrack) {
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title,
-          artist: currentTrack.artist,
-          album: 'vanz music (beta testing)',
-          artwork: [
-            { src: currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '192x192', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '256x256', type: 'image/jpeg' },
-            { src: currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
-          ]
-        });
-
-        navigator.mediaSession.setActionHandler('play', () => {
-          if (ytPlayerRef.current?.playVideo) {
-            ytPlayerRef.current.playVideo();
-            setIsPlaying(true);
-          }
-        });
-
-        navigator.mediaSession.setActionHandler('pause', () => {
-          if (ytPlayerRef.current?.pauseVideo) {
-            ytPlayerRef.current.pauseVideo();
-            setIsPlaying(false);
-          }
-        });
-
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-          playPrevious();
-        });
-
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-          playNext();
-        });
-
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-          if (details.seekTime !== undefined) {
-            seekTo(details.seekTime);
-          }
-        });
-
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          seekTo(Math.max(currentTime - skipTime, 0));
-        });
-
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          seekTo(Math.min(currentTime + skipTime, duration));
-        });
-      } catch (e) {
-        console.warn('MediaSession handler error:', e);
-      }
-    }
-  }, [currentTrack, currentTime, duration]);
-
-  // Track playback and lyrics fetching
   const playTrack = async (track: Track, newQueue?: Track[]) => {
+    if (!track || !track.id) return;
+
     setCurrentTrack(track);
     setCurrentTime(0);
-    setIsBuffering(true);
+    setDuration(track.durationSeconds || 0);
 
     if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
@@ -502,10 +490,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
-    // Add to history & cache in IndexedDB
-    addLocalHistory(track);
+    // Add to history & cache in IndexedDB per active account
+    const uid = user ? user.uid : 'guest';
+    addUserHistory(uid, track);
     cacheTrackForOffline(track);
-    getLocalHistory().then(setHistory);
+    getUserHistory(uid).then(setHistory);
 
     // Load video in YouTube player
     if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
@@ -516,7 +505,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsPlaying(true);
     }
 
-    // Fetch genuine real-time synced lyrics from authentic sources
+    // Fetch genuine real-time synced lyrics
     setIsLoadingLyrics(true);
     try {
       const result = await fetchRealTrackLyrics(
@@ -670,26 +659,44 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setQueue(prev => [...prev, track]);
   };
 
-  // Favorites management
+  // Favorites management (Scoped to Active Account)
   const isFavorite = (trackId: string) => {
     return favorites.some(t => t.id === trackId);
   };
 
   const toggleFavoriteAction = async (track: Track) => {
-    await toggleLocalFavorite(track);
-    const updated = await getLocalFavorites();
+    const uid = user ? user.uid : 'guest';
+    const isCurrentlyFav = favorites.some(t => t.id === track.id);
+    await toggleUserFavorite(uid, track);
+    const updated = await getUserFavorites(uid);
     setFavorites(updated);
+    // Sync community global like count
+    try {
+      await toggleSongLikeCount(track, !isCurrentlyFav);
+    } catch {}
   };
 
-  // Playlists management
+  // Admin role check strictly for 'support.vanzmusicid@gmail.com'
+  const isAdmin = isUserAdmin(user);
+
+  const boostSongLikesAction = async (
+    track: Track | { id: string; title: string; artist: string; thumbnail?: string }, 
+    amount: number
+  ) => {
+    return await adminBoostSongLikes(user, track, amount);
+  };
+
+  // Playlists management (Scoped to Active Account)
   const refreshPlaylists = async () => {
-    const pl = await getLocalPlaylists();
+    const uid = user ? user.uid : 'guest';
+    const pl = await getUserPlaylists(uid);
     setPlaylists(pl);
   };
 
   const createPlaylist = async (name: string, description?: string): Promise<Playlist> => {
+    const uid = user ? user.uid : 'guest';
     const newPlaylist: Playlist = {
-      id: `playlist-${Date.now()}`,
+      id: `pl-${uid}-${Date.now()}`,
       name,
       description,
       coverImage: 'https://i.ytimg.com/vi/kPa7bsKwL-c/hqdefault.jpg',
@@ -697,28 +704,27 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: Date.now(),
       isCustom: true
     };
-    await saveLocalPlaylist(newPlaylist);
+    await saveUserPlaylist(uid, newPlaylist);
     await refreshPlaylists();
     return newPlaylist;
   };
 
   const addSongToPlaylistAction = async (playlistId: string, track: Track) => {
-    await addTrackToPlaylist(playlistId, track);
+    const uid = user ? user.uid : 'guest';
+    await addTrackToUserPlaylist(uid, playlistId, track);
     await refreshPlaylists();
   };
 
   const removeSongFromPlaylistAction = async (playlistId: string, trackId: string) => {
-    console.log("Removing track:", trackId, "from playlist:", playlistId);
-    await removeTrackFromPlaylist(playlistId, trackId);
+    const uid = user ? user.uid : 'guest';
+    await removeTrackFromUserPlaylist(uid, playlistId, trackId);
     await refreshPlaylists();
-    console.log("Track removed and playlists refreshed.");
   };
 
   const deletePlaylistAction = async (playlistId: string) => {
-    console.log("Deleting playlist:", playlistId);
-    await deleteLocalPlaylist(playlistId);
+    const uid = user ? user.uid : 'guest';
+    await deleteUserPlaylist(uid, playlistId);
     await refreshPlaylists();
-    console.log("Playlist deleted and playlists refreshed.");
   };
 
   return (
@@ -777,18 +783,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setThemeMode,
 
         user,
+        isAdmin,
+        adminEmail: ADMIN_EMAIL,
         isAuthLoading,
         signInWithGoogleAction,
+        registerWithEmailAction,
+        loginWithEmailAction,
+        updateUserProfileAction,
         signInWithGuestProfile,
         signOutAction,
+        boostSongLikesAction,
 
         ytContainerId,
-
         themeColor: currentPalette.color,
         themeGlow: currentPalette.glow,
 
         isBottomBarsVisible,
-        setIsBottomBarsVisible
+        setIsBottomBarsVisible,
       }}
     >
       {children}

@@ -21,11 +21,14 @@ import {
   Radio,
   Search,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatViews } from '../lib/youtube';
 import { LyricsSearchModal } from './LyricsSearchModal';
+import { AdminLikeBoosterModal } from './AdminLikeBoosterModal';
+import { subscribeSongLikes } from '../lib/songLikeService';
 
 interface FullPlayerModalProps {
   onAddToPlaylist: () => void;
@@ -63,13 +66,25 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
     toggleFavoriteAction, 
     queue, 
     queueIndex,
-    ytContainerId
+    ytContainerId,
+    isAdmin
   } = usePlayer();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isLyricsSearchModalOpen, setLyricsSearchModalOpen] = useState(false);
+  const [isAdminBoosterOpen, setIsAdminBoosterOpen] = useState(false);
+  const [trackLikes, setTrackLikes] = useState<number>(0);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
+
+  // Subscribe to real-time song likes
+  useEffect(() => {
+    if (!currentTrack?.id) return;
+    const unsub = subscribeSongLikes(currentTrack.id, (count) => {
+      setTrackLikes(count);
+    });
+    return () => unsub();
+  }, [currentTrack?.id]);
 
   // Calculate current active lyric line based on currentTime
   useEffect(() => {
@@ -350,6 +365,19 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Special Admin Booster Button */}
+              {isAdmin && (
+                <button
+                  id="full-player-admin-boost-btn"
+                  onClick={() => setIsAdminBoosterOpen(true)}
+                  className="px-2.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/30 to-amber-600/30 hover:from-amber-500/50 hover:to-amber-600/50 border border-amber-400/40 active:scale-95 transition-all text-amber-300 flex items-center gap-1.5 text-xs font-bold shadow-md shadow-amber-500/20"
+                  title="Pusat Kendali Admin: Tambah / Boost Like Lagu"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
+                  <span className="text-[11px]">Boost Like</span>
+                </button>
+              )}
+
               {/* Add to Playlist */}
               <button
                 id="full-player-add-playlist-btn"
@@ -360,18 +388,25 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                 <Plus className="w-5 h-5" />
               </button>
 
-              {/* Heart Favorite */}
+              {/* Heart Favorite with Like Count */}
               <button
                 id="full-player-favorite-btn"
                 onClick={() => toggleFavoriteAction(currentTrack)}
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/90"
-                title="Favorit"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full active:scale-95 transition-all text-xs font-bold ${
+                  isFavorite(currentTrack.id) 
+                    ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' 
+                    : 'bg-white/10 hover:bg-white/20 text-white/90'
+                }`}
+                title="Sukai Lagu Ini"
               >
                 <Heart 
-                  className={`w-5 h-5 ${
+                  className={`w-4 h-4 ${
                     isFavorite(currentTrack.id) ? 'fill-rose-500 text-rose-500' : 'text-white/90'
                   }`} 
                 />
+                {trackLikes > 0 && (
+                  <span className="text-[11px] font-semibold">{trackLikes.toLocaleString('id-ID')}</span>
+                )}
               </button>
             </div>
           </div>
@@ -503,6 +538,15 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
           isOpen={isLyricsSearchModalOpen}
           onClose={() => setLyricsSearchModalOpen(false)}
         />
+
+        {/* Modal Admin Booster Like (Hanya untuk Admin) */}
+        {isAdmin && (
+          <AdminLikeBoosterModal
+            isOpen={isAdminBoosterOpen}
+            onClose={() => setIsAdminBoosterOpen(false)}
+            initialTrack={currentTrack}
+          />
+        )}
       </motion.div>
     </AnimatePresence>
   );
