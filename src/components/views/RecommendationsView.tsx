@@ -89,7 +89,7 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({ onOpen
             <div className="flex items-center justify-between text-[11px] text-neutral-300">
               <span className="flex items-center gap-1 font-medium">
                 <Headphones className="w-3 h-3 text-[#fa2d48]" />
-                {loadingCategory === cat.name ? 'Memuat...' : 'Putar Radio'}
+                {loadingCategory === cat.name ? 'sabar ya !' : 'Putar Radio'}
               </span>
               <Play className="w-3.5 h-3.5 fill-current opacity-80 group-hover:opacity-100 transition-opacity" />
             </div>

@@ -183,9 +183,9 @@ export const LyricsSearchModal: React.FC<LyricsSearchModalProps> = ({ isOpen, on
                 </div>
 
                 {isSearching ? (
-                  <div className="py-12 text-center text-white/50 text-xs">
+                  <div className="py-12 text-center text-white/70 text-xs">
                     <div className="w-6 h-6 border-2 border-[#fa2d48] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Sedang mencari lirik resmi di database global...
+                    <span className="animate-pulse font-medium">sabar ya !</span>
                   </div>
                 ) : results.length > 0 ? (
                   results.map((item) => (

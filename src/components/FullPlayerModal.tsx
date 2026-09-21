@@ -58,6 +58,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
     lyrics, 
     lyricsResult,
     isLoadingLyrics, 
+    isBuffering,
     isFavorite, 
     toggleFavoriteAction, 
     queue, 
@@ -227,7 +228,10 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
 
                 <div className="flex items-center gap-2">
                   {isLoadingLyrics ? (
-                    <span className="text-[11px] text-[var(--theme-accent)] animate-pulse">Memuat lirik asli...</span>
+                    <span className="text-[11px] text-[var(--theme-accent)] animate-pulse flex items-center gap-1.5 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-[var(--theme-accent)] animate-ping" />
+                      sabar ya !
+                    </span>
                   ) : (
                     <button
                       id="search-lyrics-btn"
@@ -417,18 +421,27 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             </button>
 
             {/* Prominent Play/Pause Button */}
-            <button
-              id="full-player-toggle-btn"
-              onClick={togglePlay}
-              className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-95 transition-transform"
-              title={isPlaying ? "Jeda" : "Putar"}
-            >
-              {isPlaying ? (
-                <Pause className="w-8 h-8 fill-current" />
-              ) : (
-                <Play className="w-8 h-8 fill-current ml-1" />
+            <div className="flex flex-col items-center">
+              <button
+                id="full-player-toggle-btn"
+                onClick={togglePlay}
+                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-95 transition-transform relative"
+                title={isBuffering ? "sabar ya !" : isPlaying ? "Jeda" : "Putar"}
+              >
+                {isBuffering ? (
+                  <div className="w-8 h-8 border-3 border-black border-t-transparent rounded-full animate-spin" />
+                ) : isPlaying ? (
+                  <Pause className="w-8 h-8 fill-current" />
+                ) : (
+                  <Play className="w-8 h-8 fill-current ml-1" />
+                )}
+              </button>
+              {isBuffering && (
+                <span className="text-[11px] font-semibold text-[var(--theme-accent)] animate-pulse mt-1.5">
+                  sabar ya !
+                </span>
               )}
-            </button>
+            </div>
 
             <button
               id="next-track-btn"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
@@ -19,11 +19,55 @@ const AppContent: React.FC = () => {
     ytContainerId, 
     isVideoMode, 
     isFullPlayerOpen,
-    currentTrack 
+    currentTrack,
+    setIsBottomBarsVisible 
   } = usePlayer();
 
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
   const [trackForPlaylist, setTrackForPlaylist] = useState<Track | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      if (!ticking.current) {
+        window.requestAnimationFrame(() => {
+          const currentY = el.scrollTop;
+          const diff = currentY - lastScrollY.current;
+
+          // Scroll down past threshold -> hide bottom bars
+          if (diff > 8 && currentY > 40) {
+            setIsBottomBarsVisible(false);
+          } 
+          // Scroll up or near top -> show bottom bars
+          else if (diff < -6 || currentY <= 20) {
+            setIsBottomBarsVisible(true);
+          }
+
+          lastScrollY.current = currentY;
+          ticking.current = false;
+        });
+        ticking.current = true;
+      }
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+    };
+  }, [setIsBottomBarsVisible]);
+
+  // Always restore bottom bars on tab navigation
+  useEffect(() => {
+    setIsBottomBarsVisible(true);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  }, [activeTab, setIsBottomBarsVisible]);
 
   const handleOpenPlaylistModal = (track?: Track) => {
     setTrackForPlaylist(track || null);
@@ -55,7 +99,10 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto pb-24 sm:pb-8">
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto pb-24 sm:pb-8"
+      >
         <main className="flex-1 px-4 sm:px-10 py-6 sm:py-8 min-w-0">
           <AnimatePresence mode="wait">
             {activeTab === 'search' && (

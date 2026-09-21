@@ -142,12 +142,19 @@ export const ListenNowView: React.FC<ListenNowViewProps> = ({ onOpenPlaylistModa
               Trending Hari Ini
             </h2>
           </div>
-          <button
-            onClick={() => setActiveTab('recommendations')}
-            className="text-xs font-semibold text-[#fa2d48] hover:underline flex items-center gap-1"
-          >
-            Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {isLoading && (
+              <span className="text-xs text-[#fa2d48] font-semibold animate-pulse">
+                sabar ya !
+              </span>
+            )}
+            <button
+              onClick={() => setActiveTab('recommendations')}
+              className="text-xs font-semibold text-[#fa2d48] hover:underline flex items-center gap-1"
+            >
+              Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">

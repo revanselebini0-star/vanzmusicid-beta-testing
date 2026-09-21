@@ -84,6 +84,10 @@ interface PlayerContextType {
   // Dynamic Theme Color based on track
   themeColor: string;
   themeGlow: string;
+
+  // Mobile scroll hide/show state
+  isBottomBarsVisible: boolean;
+  setIsBottomBarsVisible: (visible: boolean) => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -157,6 +161,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Navigation and Theme
   const [activeTab, setActiveTab] = useState<ViewTab>('search');
+  const [isBottomBarsVisible, setIsBottomBarsVisible] = useState<boolean>(true);
   const [themeMode, setThemeModeState] = useState<'dark' | 'light' | 'system'>(() => {
     try {
       const saved = localStorage.getItem('vanz_theme_mode');
@@ -737,7 +742,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         ytContainerId,
 
         themeColor: currentPalette.color,
-        themeGlow: currentPalette.glow
+        themeGlow: currentPalette.glow,
+
+        isBottomBarsVisible,
+        setIsBottomBarsVisible
       }}
     >
       {children}

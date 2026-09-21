@@ -5,7 +5,7 @@ import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
 export const TabBar: React.FC = () => {
-  const { activeTab, setActiveTab } = usePlayer();
+  const { activeTab, setActiveTab, isBottomBarsVisible } = usePlayer();
 
   const tabs: { id: ViewTab; label: string; icon: any }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
@@ -15,7 +15,13 @@ export const TabBar: React.FC = () => {
   ];
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1c1c1e]/95 backdrop-blur-xl border-t border-white/10 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 px-2">
+    <nav 
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1c1c1e]/95 backdrop-blur-xl border-t border-white/10 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 px-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        isBottomBarsVisible 
+          ? 'translate-y-0 opacity-100 pointer-events-auto shadow-2xl' 
+          : 'translate-y-full opacity-0 pointer-events-none'
+      }`}
+    >
       <div className="flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -51,3 +57,4 @@ export const TabBar: React.FC = () => {
     </nav>
   );
 };
+

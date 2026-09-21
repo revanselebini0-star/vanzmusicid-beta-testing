@@ -328,7 +328,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ onOpenPlaylistModal }) =
       {isSearching && (
         <div className="py-12 flex flex-col items-center justify-center">
           <div className="w-7 h-7 border-2 border-[#fa2d48] border-t-transparent rounded-full animate-spin mb-2" />
-          <p className="text-xs text-neutral-400">Mencari lagu di YouTube Data API...</p>
+          <p className="text-xs text-neutral-300 font-medium animate-pulse">sabar ya !</p>
         </div>
       )}
 

@@ -108,9 +108,9 @@ export const AiView: React.FC = () => {
             <div className="w-9 h-9 rounded-xl bg-[var(--theme-accent)] text-white flex items-center justify-center shadow-md">
               <Bot className="w-4 h-4 animate-pulse" />
             </div>
-            <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl rounded-tl-none px-4 py-3 text-sm text-neutral-400 flex items-center gap-2 shadow-md">
+            <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl rounded-tl-none px-4 py-3 text-sm text-neutral-300 flex items-center gap-2 shadow-md">
               <RefreshCw className="w-4 h-4 animate-spin text-[var(--theme-accent)]" />
-              <span>Vanz AI sedang meracik rekomendasi & jawaban...</span>
+              <span className="font-medium">sabar ya !</span>
             </div>
           </div>
         )}
