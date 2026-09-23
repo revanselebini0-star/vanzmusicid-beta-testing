@@ -50,10 +50,22 @@ export async function getSongLikes(trackId: string, fallbackInitial = 0): Promis
   
   const cache = getLocalLikesCache();
   if (cache[trackId] !== undefined) {
-    // Return cached immediately if available
-    fallbackInitial = cache[trackId];
+    return cache[trackId];
   }
 
+  // Try server API first
+  try {
+    const res = await fetch(`/api/song-likes/${encodeURIComponent(trackId)}`).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json();
+      if (typeof data.likes === 'number') {
+        saveLocalLikesCache(trackId, data.likes);
+        return data.likes;
+      }
+    }
+  } catch {}
+
+  // Fallback to Firestore cache
   try {
     const songDocRef = doc(db, 'song_likes', trackId);
     const snap = await getDoc(songDocRef);
@@ -63,9 +75,7 @@ export async function getSongLikes(trackId: string, fallbackInitial = 0): Promis
       saveLocalLikesCache(trackId, count);
       return count;
     }
-  } catch (err) {
-    console.info('Firestore getSongLikes notice:', err);
-  }
+  } catch {}
 
   return fallbackInitial;
 }
@@ -127,6 +137,13 @@ export async function toggleSongLikeCount(
   const newCount = Math.max(0, current + delta);
   saveLocalLikesCache(trackId, newCount);
 
+  // Sync to Express Server
+  fetch(`/api/song-likes/${encodeURIComponent(trackId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ increment: delta })
+  }).catch(() => {});
+
   try {
     const songDocRef = doc(db, 'song_likes', trackId);
     await setDoc(songDocRef, {
@@ -167,6 +184,13 @@ export async function adminBoostSongLikes(
   const newCount = Math.max(0, current + boostAmount);
   saveLocalLikesCache(trackId, newCount);
 
+  // Sync to Express Server
+  fetch(`/api/song-likes/${encodeURIComponent(trackId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: boostAmount })
+  }).catch(() => {});
+
   try {
     const songDocRef = doc(db, 'song_likes', trackId);
     await setDoc(songDocRef, {
@@ -186,7 +210,6 @@ export async function adminBoostSongLikes(
       message: `Berhasil menambahkan +${boostAmount.toLocaleString('id-ID')} Like ke lagu "${track.title}"!`
     };
   } catch (err: any) {
-    console.warn('Firestore admin boost note:', err);
     return {
       success: true,
       newCount,
@@ -214,6 +237,13 @@ export async function adminSetExactSongLikes(
   const trackId = track.id;
   const newCount = Math.max(0, exactLikes);
   saveLocalLikesCache(trackId, newCount);
+
+  // Sync to Express Server
+  fetch(`/api/song-likes/${encodeURIComponent(trackId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ likes: newCount })
+  }).catch(() => {});
 
   try {
     const songDocRef = doc(db, 'song_likes', trackId);

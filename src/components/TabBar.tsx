@@ -21,7 +21,7 @@ export const TabBar: React.FC = () => {
 
   return (
     <nav 
-      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-2xl backdrop-saturate-150 border-t border-white/[0.12] shadow-[0_-4px_24px_rgba(0,0,0,0.5)] pb-[max(env(safe-area-inset-bottom),8px)] pt-2 px-1 overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-t border-white/[0.12] shadow-[0_-4px_24px_rgba(0,0,0,0.5)] pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 px-2 overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
         isBottomBarsVisible 
           ? 'translate-y-0 pointer-events-auto' 
           : 'translate-y-full pointer-events-none'
@@ -58,17 +58,17 @@ export const TabBar: React.FC = () => {
                   />
                 </div>
               ) : isCenterSearch ? (
-                <div className={`p-1.5 rounded-xl transition-all ${
+                <div className={`p-1 rounded-xl transition-all ${
                   isActive 
-                    ? 'bg-[var(--theme-accent)] text-white shadow-lg shadow-[var(--theme-glow)]' 
+                    ? 'bg-[var(--theme-accent)] text-white shadow-sm shadow-[var(--theme-glow)]' 
                     : 'bg-white/10 text-neutral-200 border border-white/10'
                 }`}>
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-4.5 h-4.5" />
                 </div>
               ) : (
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
               )}
-              <span className={`text-[10px] tracking-tight whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}>
+              <span className={`text-[10px] leading-tight tracking-tight whitespace-nowrap ${isActive ? 'font-semibold' : 'font-medium'}`}>
                 {tab.label}
               </span>
             </button>

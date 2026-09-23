@@ -17,7 +17,10 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  setLogLevel,
+  disableNetwork,
+  enableNetwork
 } from 'firebase/firestore';
 import { UserProfile } from '../types';
 
@@ -35,6 +38,11 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 
+// Silence Firestore internal logger so connection retries and backend 404s do not spam console.error
+try {
+  setLogLevel('silent');
+} catch {}
+
 // Enable full Offline Persistence Cache in Firestore
 let firestoreDb;
 try {
@@ -45,6 +53,58 @@ try {
   firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
+
+// Immediately disable remote network until reachability check completes.
+// This prevents immediate connection failure errors when Cloud Firestore has not been created on the backend.
+try {
+  disableNetwork(db).catch(() => {});
+} catch {}
+
+// Check Firestore backend availability and gracefully control network state
+let isFirestoreAvailable = false;
+
+export function getIsFirestoreAvailable(): boolean {
+  return isFirestoreAvailable;
+}
+
+/**
+ * Validate connection to Cloud Firestore.
+ * If Cloud Firestore has not been activated or is unreachable, disables network
+ * so that Firestore functions locally via persistence cache without connection spam.
+ */
+export async function testAndManageFirestoreConnection(): Promise<boolean> {
+  try {
+    const checkUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents?key=${firebaseConfig.apiKey}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(checkUrl, {
+      method: 'GET',
+      signal: controller.signal
+    }).catch(() => null);
+    
+    clearTimeout(timeout);
+
+    // If HTTP 404, Cloud Firestore database does not exist in this project yet
+    if (!response || response.status === 404 || response.status >= 500) {
+      isFirestoreAvailable = false;
+      await disableNetwork(db).catch(() => {});
+      return false;
+    }
+
+    // Backend is reachable
+    isFirestoreAvailable = true;
+    await enableNetwork(db).catch(() => {});
+    return true;
+  } catch {
+    isFirestoreAvailable = false;
+    await disableNetwork(db).catch(() => {});
+    return false;
+  }
+}
+
+// Run initial connection validation immediately in background
+testAndManageFirestoreConnection().catch(() => {});
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

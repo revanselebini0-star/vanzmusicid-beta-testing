@@ -67,7 +67,9 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
     queue, 
     queueIndex,
     ytContainerId,
-    isAdmin
+    isAdmin,
+    isDolbyAtmos,
+    setDolbyModalOpen
   } = usePlayer();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -359,9 +361,24 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
               <h2 className="text-lg md:text-xl font-bold text-white truncate">
                 {currentTrack.title}
               </h2>
-              <p className="text-sm md:text-base text-white/70 truncate">
-                {currentTrack.artist}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-sm md:text-base text-white/70 truncate">
+                  {currentTrack.artist}
+                </p>
+                <button
+                  id="full-player-dolby-btn"
+                  onClick={() => setDolbyModalOpen(true)}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider transition-colors cursor-pointer border ${
+                    isDolbyAtmos
+                      ? 'bg-white/10 hover:bg-white/15 border-white/20 text-white'
+                      : 'bg-transparent hover:bg-white/5 border-white/10 text-white/40'
+                  }`}
+                  title="Pengaturan Dolby Atmos"
+                >
+                  <span className="font-serif font-black tracking-tighter text-[11px] leading-none">DO</span>
+                  <span className="text-[9px] font-bold tracking-wide">ATMOS</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">

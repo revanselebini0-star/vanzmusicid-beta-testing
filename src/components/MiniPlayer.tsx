@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { 
   Shuffle, 
@@ -35,7 +35,9 @@ export const MiniPlayer: React.FC = () => {
     currentTime,
     duration,
     seekTo,
-    isBottomBarsVisible
+    isBottomBarsVisible,
+    isDolbyAtmos,
+    setDolbyModalOpen
   } = usePlayer();
 
   const [isSeeking, setIsSeeking] = useState(false);
@@ -84,10 +86,10 @@ export const MiniPlayer: React.FC = () => {
 
   return (
     <div 
-      className={`fixed bottom-[calc(max(env(safe-area-inset-bottom),12px)+68px)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95vw] sm:w-auto max-w-md lg:max-w-none transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+      className={`fixed bottom-[calc(max(env(safe-area-inset-bottom),8px)+56px)] lg:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95vw] sm:w-auto max-w-md lg:max-w-none transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
         isBottomBarsVisible
           ? 'translate-y-0 pointer-events-auto'
-          : 'translate-y-[64px] lg:translate-y-0 pointer-events-auto shadow-2xl'
+          : 'translate-y-[56px] lg:translate-y-0 pointer-events-auto shadow-2xl'
       }`}
     >
       <div 
@@ -216,8 +218,20 @@ export const MiniPlayer: React.FC = () => {
 
         <div className="h-5 w-[1px] bg-white/10 mx-0.5" />
 
-        {/* Action Buttons (Lyrics, More, Queue) */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        {/* Action Buttons (Dolby Atmos, Lyrics, More, Queue) */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setDolbyModalOpen(true)}
+            className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider transition-colors cursor-pointer border ${
+              isDolbyAtmos
+                ? 'bg-white/10 hover:bg-white/15 border-white/20 text-white'
+                : 'bg-transparent hover:bg-white/5 border-white/10 text-white/40'
+            }`}
+            title="Pengaturan Dolby Atmos"
+          >
+            ATMOS
+          </button>
+
           <button
             onClick={() => {
               setLyricsOpen(true);

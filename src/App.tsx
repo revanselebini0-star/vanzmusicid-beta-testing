@@ -5,6 +5,7 @@ import { TabBar } from './components/TabBar';
 import { MiniPlayer } from './components/MiniPlayer';
 import { FullPlayerModal } from './components/FullPlayerModal';
 import { PlaylistModal } from './components/PlaylistModal';
+import { DolbyAtmosModal } from './components/DolbyAtmosModal';
 import { ListenNowView } from './components/views/ListenNowView';
 import { RecommendationsView } from './components/views/RecommendationsView';
 import { SearchView } from './components/views/SearchView';
@@ -104,7 +105,7 @@ const AppContent: React.FC = () => {
         className={
           isVideoMode && isFullPlayerOpen
             ? "fixed z-[60] top-16 left-1/2 -translate-x-1/2 w-[90%] max-w-lg aspect-video rounded-2xl overflow-hidden shadow-2xl ring-2 ring-white/20 bg-black"
-            : "fixed -top-[9999px] -left-[9999px] w-1 h-1 pointer-events-none opacity-0"
+            : "fixed bottom-0 right-0 w-32 h-20 pointer-events-none opacity-[0.002] -z-50 overflow-hidden"
         }
       >
         <div id={ytContainerId} className="w-full h-full" />
@@ -219,6 +220,9 @@ const AppContent: React.FC = () => {
         onClose={handleClosePlaylistModal}
         trackToAdd={trackForPlaylist}
       />
+
+      {/* Dolby Atmos Spatial Audio & EQ Settings Modal */}
+      <DolbyAtmosModal />
     </div>
   );
 };

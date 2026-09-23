@@ -148,7 +148,9 @@ export function subscribeCommunityVotes(
   // 1. Instantly emit local votes so the UI is immediate
   onUpdate(getLocalVotes());
 
-  // 2. Real-time listener from Firestore
+  // 2. Real-time listener from Firestore with robust API polling fallback
+  let pollInterval: any = null;
+
   try {
     const votesCollection = collection(db, 'community_votes');
 
@@ -189,25 +191,49 @@ export function subscribeCommunityVotes(
       },
       (error) => {
         const isPerm = error.code === 'permission-denied' || error.message.includes('permission');
-        console.warn('Firestore subscription status:', error.code, error.message);
         if (isPerm) {
           updateStatus('permission_denied', 'Aturan Firestore belum dibuka di Firebase Console');
         } else {
-          updateStatus('local_fallback', error.message);
+          updateStatus('local_fallback', 'Mode Sinkronisasi Lokal & Server Aktif');
         }
         fallbackPollApi(onUpdate);
+
+        // Start background polling if not already started
+        if (!pollInterval && !isUnsubscribed) {
+          pollInterval = setInterval(() => {
+            if (!isUnsubscribed) {
+              fallbackPollApi(onUpdate);
+            }
+          }, 8000);
+        }
       }
     );
   } catch (e: any) {
-    console.warn('Firestore initialization error:', e);
-    updateStatus('local_fallback');
+    updateStatus('local_fallback', 'Mode Sinkronisasi Lokal & Server Aktif');
     fallbackPollApi(onUpdate);
+
+    if (!pollInterval && !isUnsubscribed) {
+      pollInterval = setInterval(() => {
+        if (!isUnsubscribed) {
+          fallbackPollApi(onUpdate);
+        }
+      }, 8000);
+    }
   }
+
+  // Also do an initial API poll to ensure server data is up to date
+  fallbackPollApi(onUpdate);
 
   return () => {
     isUnsubscribed = true;
     if (unsubscribeFirestore) {
-      unsubscribeFirestore();
+      try {
+        unsubscribeFirestore();
+      } catch {}
+    }
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
     }
   };
 }

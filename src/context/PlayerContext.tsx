@@ -113,6 +113,14 @@ interface PlayerContextType {
   // Mobile scroll hide/show state
   isBottomBarsVisible: boolean;
   setIsBottomBarsVisible: (visible: boolean) => void;
+
+  // Dolby Atmos Spatial Audio & EQ Enhancement
+  isDolbyAtmos: boolean;
+  toggleDolbyAtmos: () => void;
+  dolbyMode: 'spatial' | 'cinema' | 'vocal' | 'bass';
+  setDolbyMode: (mode: 'spatial' | 'cinema' | 'vocal' | 'bass') => void;
+  isDolbyModalOpen: boolean;
+  setDolbyModalOpen: (open: boolean) => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -133,6 +141,9 @@ const TRACK_THEME_PALETTES = [
   { name: 'indigo', color: '#5856d6', glow: 'rgba(88, 86, 214, 0.4)' },
   { name: 'cyan', color: '#32ade6', glow: 'rgba(50, 173, 230, 0.4)' },
 ];
+
+// 1-second silent WAV data URI to keep mobile OS AudioSession alive in background
+const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
 const getThemePalette = (track: Track | null) => {
   if (!track) return TRACK_THEME_PALETTES[0];
@@ -168,6 +179,179 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ytPlayerRef = useRef<any>(null);
   const ytContainerId = 'vanz-yt-player';
   const progressTimerRef = useRef<any>(null);
+
+  // Mobile Background Playback & AudioSession Keepalive Refs
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const wasPlayingBeforeHiddenRef = useRef<boolean>(false);
+  const isUserPausedRef = useRef<boolean>(false);
+
+  // Activate audio session anchor (keeps mobile OS audio pipeline open)
+  const activateAudioAnchor = useCallback(() => {
+    try {
+      if (silentAudioRef.current) {
+        const p = silentAudioRef.current.play();
+        if (p !== undefined) {
+          p.catch(() => {});
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Deactivate audio session anchor
+  const deactivateAudioAnchor = useCallback(() => {
+    try {
+      if (silentAudioRef.current) {
+        silentAudioRef.current.pause();
+      }
+    } catch {}
+  }, []);
+
+  // Initialize silent audio anchor on mount
+  useEffect(() => {
+    try {
+      const audio = new Audio(SILENT_AUDIO_URI);
+      audio.loop = true;
+      audio.volume = 0.001; // subtle volume so mobile OS registers active output session
+      silentAudioRef.current = audio;
+    } catch (e) {
+      console.warn("Silent audio init error:", e);
+    }
+
+    return () => {
+      if (silentAudioRef.current) {
+        silentAudioRef.current.pause();
+        silentAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Dolby Atmos Spatial Audio & Acoustic EQ state
+  const [isDolbyAtmos, setIsDolbyAtmos] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('vanz_dolby_atmos');
+      return saved !== null ? saved === 'true' : true; // Default Active for every song
+    } catch {
+      return true;
+    }
+  });
+
+  const [dolbyMode, setDolbyModeState] = useState<'spatial' | 'cinema' | 'vocal' | 'bass'>(() => {
+    try {
+      const saved = localStorage.getItem('vanz_dolby_mode') as any;
+      if (saved && ['spatial', 'cinema', 'vocal', 'bass'].includes(saved)) return saved;
+    } catch {}
+    return 'spatial';
+  });
+
+  const [isDolbyModalOpen, setDolbyModalOpen] = useState<boolean>(false);
+
+  const toggleDolbyAtmos = () => {
+    setIsDolbyAtmos(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('vanz_dolby_atmos', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const setDolbyMode = (mode: 'spatial' | 'cinema' | 'vocal' | 'bass') => {
+    setDolbyModeState(mode);
+    try {
+      localStorage.setItem('vanz_dolby_mode', mode);
+    } catch {}
+  };
+
+  // Web Audio Spatial Acoustic Engine
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const bassFilterRef = useRef<BiquadFilterNode | null>(null);
+  const vocalFilterRef = useRef<BiquadFilterNode | null>(null);
+  const trebleFilterRef = useRef<BiquadFilterNode | null>(null);
+
+  const initWebAudioAtmos = useCallback(() => {
+    if (audioCtxRef.current) {
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return;
+    }
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const ctx = new AudioContextClass();
+      audioCtxRef.current = ctx;
+
+      // Low-shelf filter for cinematic bass warmth (85Hz)
+      const bass = ctx.createBiquadFilter();
+      bass.type = 'lowshelf';
+      bass.frequency.value = 85;
+      bass.gain.value = 4.0;
+      bassFilterRef.current = bass;
+
+      // Peaking filter for vocal clarity & spatial presence (3200Hz)
+      const vocal = ctx.createBiquadFilter();
+      vocal.type = 'peaking';
+      vocal.frequency.value = 3200;
+      vocal.Q.value = 1.2;
+      vocal.gain.value = 3.5;
+      vocalFilterRef.current = vocal;
+
+      // High-shelf filter for airy openness (11500Hz)
+      const treble = ctx.createBiquadFilter();
+      treble.type = 'highshelf';
+      treble.frequency.value = 11500;
+      treble.gain.value = 4.5;
+      trebleFilterRef.current = treble;
+
+      // Dynamic compressor for studio-grade acoustic headroom
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      comp.knee.value = 12;
+      comp.ratio.value = 3;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.25;
+
+      // Connect filter chain
+      bass.connect(vocal);
+      vocal.connect(treble);
+      treble.connect(comp);
+      comp.connect(ctx.destination);
+    } catch (e) {
+      console.warn("Web Audio Atmos init notice:", e);
+    }
+  }, []);
+
+  // Update Atmos EQ profile whenever mode or status changes
+  useEffect(() => {
+    if (!audioCtxRef.current) return;
+
+    if (!isDolbyAtmos) {
+      if (bassFilterRef.current) bassFilterRef.current.gain.value = 0;
+      if (vocalFilterRef.current) vocalFilterRef.current.gain.value = 0;
+      if (trebleFilterRef.current) trebleFilterRef.current.gain.value = 0;
+      return;
+    }
+
+    if (dolbyMode === 'spatial') {
+      if (bassFilterRef.current) bassFilterRef.current.gain.value = 4.0;
+      if (vocalFilterRef.current) vocalFilterRef.current.gain.value = 3.5;
+      if (trebleFilterRef.current) trebleFilterRef.current.gain.value = 4.5;
+    } else if (dolbyMode === 'cinema') {
+      if (bassFilterRef.current) bassFilterRef.current.gain.value = 6.0;
+      if (vocalFilterRef.current) vocalFilterRef.current.gain.value = 2.0;
+      if (trebleFilterRef.current) trebleFilterRef.current.gain.value = 5.0;
+    } else if (dolbyMode === 'vocal') {
+      if (bassFilterRef.current) bassFilterRef.current.gain.value = 1.5;
+      if (vocalFilterRef.current) vocalFilterRef.current.gain.value = 5.5;
+      if (trebleFilterRef.current) trebleFilterRef.current.gain.value = 3.0;
+    } else if (dolbyMode === 'bass') {
+      if (bassFilterRef.current) bassFilterRef.current.gain.value = 8.0;
+      if (vocalFilterRef.current) vocalFilterRef.current.gain.value = 1.0;
+      if (trebleFilterRef.current) trebleFilterRef.current.gain.value = 2.0;
+    }
+  }, [isDolbyAtmos, dolbyMode]);
 
   // Dynamic Theme Color based on track
   const [currentPalette, setCurrentPalette] = useState(TRACK_THEME_PALETTES[0]);
@@ -417,10 +601,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               if (event.data === 1) {
                 setIsPlaying(true);
                 setIsBuffering(false);
+                isUserPausedRef.current = false;
+                activateAudioAnchor();
                 startProgressTimer();
               } else if (event.data === 2) {
+                // If paused while page is hidden (minimized/backgrounded) and user didn't request pause,
+                // auto-resume immediately so music keeps playing in background on mobile!
+                if (document.hidden && !isUserPausedRef.current && wasPlayingBeforeHiddenRef.current) {
+                  setTimeout(() => {
+                    if (!isUserPausedRef.current && ytPlayerRef.current) {
+                      try {
+                        ytPlayerRef.current.playVideo?.();
+                      } catch {}
+                    }
+                  }, 80);
+                  return;
+                }
+
                 setIsPlaying(false);
                 setIsBuffering(false);
+                deactivateAudioAnchor();
                 stopProgressTimer();
               } else if (event.data === 3) {
                 setIsBuffering(true);
@@ -447,7 +647,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       stopProgressTimer();
     };
-  }, []);
+  }, [activateAudioAnchor, deactivateAudioAnchor]);
 
   const startProgressTimer = () => {
     stopProgressTimer();
@@ -456,7 +656,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const cur = ytPlayerRef.current.getCurrentTime() || 0;
         const dur = ytPlayerRef.current.getDuration() || 0;
         setCurrentTime(cur);
-        if (dur > 0) setDuration(dur);
+        if (dur > 0) {
+          setDuration(dur);
+          if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
+            try {
+              navigator.mediaSession.setPositionState({
+                duration: Math.max(0, dur),
+                playbackRate: 1,
+                position: Math.min(dur, Math.max(0, cur))
+              });
+            } catch {}
+          }
+        }
       }
     }, 250);
   };
@@ -503,6 +714,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         suggestedQuality: 'small'
       });
       setIsPlaying(true);
+      isUserPausedRef.current = false;
+      activateAudioAnchor();
+      initWebAudioAtmos();
     }
 
     // Fetch genuine real-time synced lyrics
@@ -558,12 +772,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     if (isPlaying) {
+      isUserPausedRef.current = true;
+      wasPlayingBeforeHiddenRef.current = false;
       ytPlayerRef.current?.pauseVideo?.();
       setIsPlaying(false);
+      deactivateAudioAnchor();
       stopProgressTimer();
     } else {
+      isUserPausedRef.current = false;
       ytPlayerRef.current?.playVideo?.();
       setIsPlaying(true);
+      activateAudioAnchor();
+      initWebAudioAtmos();
       startProgressTimer();
     }
   };
@@ -621,6 +841,167 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ytPlayerRef.current.seekTo(seconds, true);
     }
   };
+
+  // Sync MediaSession metadata (Title, Artist, Album, Cover Art, Playback State)
+  const updateMediaSession = useCallback((track: Track | null, playing: boolean) => {
+    if (!('mediaSession' in navigator) || !track) return;
+
+    try {
+      const artwork = [
+        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '96x96', type: 'image/jpeg' },
+        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '128x128', type: 'image/jpeg' },
+        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '192x192', type: 'image/jpeg' },
+        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '256x256', type: 'image/jpeg' },
+        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '512x512', type: 'image/jpeg' },
+      ];
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist || 'VanzMusic',
+        album: 'VanzMusic Online',
+        artwork
+      });
+
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    } catch (e) {
+      console.warn("MediaSession update error:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateMediaSession(currentTrack, isPlaying);
+  }, [currentTrack, isPlaying, updateMediaSession]);
+
+  // MediaSession Action Handlers (Notification center, lock screen & bluetooth controls on mobile devices)
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    try {
+      navigator.mediaSession.setActionHandler('play', () => {
+        isUserPausedRef.current = false;
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+          activateAudioAnchor();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('pause', () => {
+        isUserPausedRef.current = true;
+        wasPlayingBeforeHiddenRef.current = false;
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {
+          ytPlayerRef.current.pauseVideo();
+          setIsPlaying(false);
+          deactivateAudioAnchor();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        playPrevious();
+      });
+
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        playNext();
+      });
+
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined) {
+          seekTo(details.seekTime);
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skip = details.seekOffset || 10;
+        seekTo(Math.max(0, currentTime - skip));
+      });
+
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skip = details.seekOffset || 10;
+        seekTo(Math.min(duration, currentTime + skip));
+      });
+
+      navigator.mediaSession.setActionHandler('stop', () => {
+        isUserPausedRef.current = true;
+        wasPlayingBeforeHiddenRef.current = false;
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === 'function') {
+          ytPlayerRef.current.stopVideo();
+          setIsPlaying(false);
+          deactivateAudioAnchor();
+        }
+      });
+    } catch (e) {
+      console.warn("MediaSession action handler error:", e);
+    }
+  }, [playPrevious, playNext, currentTime, duration, activateAudioAnchor, deactivateAudioAnchor]);
+
+  // Background audio keepalive & auto-resume when browser is minimized or switched to other apps
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // App is minimized or user switched to another app (e.g. WhatsApp, Instagram, screen locked)
+        if (isPlaying) {
+          wasPlayingBeforeHiddenRef.current = true;
+          activateAudioAnchor();
+
+          // Force YouTube player to continue playing in background
+          setTimeout(() => {
+            if (!isUserPausedRef.current && ytPlayerRef.current) {
+              try {
+                const state = ytPlayerRef.current.getPlayerState?.();
+                if (state !== 1) {
+                  ytPlayerRef.current.playVideo?.();
+                }
+              } catch {}
+            }
+          }, 150);
+        }
+      } else {
+        // App returned to foreground
+        if (wasPlayingBeforeHiddenRef.current && !isUserPausedRef.current) {
+          wasPlayingBeforeHiddenRef.current = false;
+          if (ytPlayerRef.current) {
+            try {
+              const state = ytPlayerRef.current.getPlayerState?.();
+              if (state === 2 || state === 5 || state === -1) {
+                ytPlayerRef.current.playVideo?.();
+                setIsPlaying(true);
+              }
+            } catch {}
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleVisibilityChange);
+    window.addEventListener('blur', () => {
+      if (isPlaying) {
+        wasPlayingBeforeHiddenRef.current = true;
+        activateAudioAnchor();
+      }
+    });
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleVisibilityChange);
+    };
+  }, [isPlaying, activateAudioAnchor]);
+
+  // Screen Wake Lock API while playing in foreground
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isPlaying && !document.hidden) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        } catch {}
+      }
+    };
+    requestWakeLock();
+    return () => {
+      wakeLock?.release?.().catch(() => {});
+    };
+  }, [isPlaying]);
 
   const setVolume = (val: number) => {
     setVolumeState(val);
@@ -800,6 +1181,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         isBottomBarsVisible,
         setIsBottomBarsVisible,
+
+        isDolbyAtmos,
+        toggleDolbyAtmos,
+        dolbyMode,
+        setDolbyMode,
+        isDolbyModalOpen,
+        setDolbyModalOpen,
       }}
     >
       {children}

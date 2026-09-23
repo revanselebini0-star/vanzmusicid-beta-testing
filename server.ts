@@ -299,6 +299,61 @@ app.post('/api/community-votes/:id/replies', (req, res) => {
   res.status(201).json(item);
 });
 
+// Song Likes Persistent API Routes
+const SONG_LIKES_FILE = path.join(DATA_DIR, 'song_likes.json');
+
+function readSongLikes(): Record<string, number> {
+  try {
+    if (fs.existsSync(SONG_LIKES_FILE)) {
+      const data = fs.readFileSync(SONG_LIKES_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Error reading song likes file:', e);
+  }
+  return {};
+}
+
+function writeSongLikes(likes: Record<string, number>) {
+  try {
+    fs.writeFileSync(SONG_LIKES_FILE, JSON.stringify(likes, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error writing song likes file:', e);
+  }
+}
+
+app.get('/api/song-likes', (req, res) => {
+  const likes = readSongLikes();
+  res.json(likes);
+});
+
+app.get('/api/song-likes/:id', (req, res) => {
+  const likes = readSongLikes();
+  const count = likes[req.params.id] || 0;
+  res.json({ trackId: req.params.id, likes: count });
+});
+
+app.post('/api/song-likes/:id', (req, res) => {
+  const { id } = req.params;
+  const { likes: setExact, amount, increment: inc } = req.body;
+  const allLikes = readSongLikes();
+  let current = allLikes[id] || 0;
+
+  if (typeof setExact === 'number') {
+    current = Math.max(0, setExact);
+  } else if (typeof amount === 'number') {
+    current = Math.max(0, current + amount);
+  } else if (typeof inc === 'number') {
+    current = Math.max(0, current + inc);
+  } else {
+    current += 1;
+  }
+
+  allLikes[id] = current;
+  writeSongLikes(allLikes);
+  res.json({ trackId: id, likes: current });
+});
+
 app.post('/api/ai/chat', async (req, res) => {
   try {
     const { messages } = req.body;
