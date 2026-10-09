@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { Track } from '../../types';
-import { VIRAL_RECOMMENDED_TRACKS, FALLBACK_TRENDING_TRACKS, searchYouTubeMusic } from '../../lib/youtube';
+import { searchYouTubeMusic, VIRAL_RECOMMENDED_TRACKS, FALLBACK_TRENDING_TRACKS } from '../../lib/musicService';
+import { getVanzTeamTracks } from '../../lib/vanzTeamMusic';
 import { 
   Sparkles, 
   Play, 
@@ -10,7 +11,7 @@ import {
   Plus, 
   Flame, 
   Compass, 
-  Music,
+  Music, 
   Headphones
 } from 'lucide-react';
 
@@ -19,6 +20,7 @@ interface RecommendationsViewProps {
 }
 
 const MOOD_CATEGORIES = [
+  { name: 'Vanz Team Music Originals', query: 'vanz team music', color: 'from-purple-600/30 to-pink-600/20 border-purple-500/40' },
   { name: 'Viral TikTok & Reels', query: 'lagu viral tiktok reels 2026', color: 'from-rose-500/20 to-pink-500/10 border-rose-500/30' },
   { name: 'Pop Galau & Senja', query: 'lagu pop galau indonesia bernadya mahalini', color: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30' },
   { name: 'Indie Indonesia', query: 'lagu indie indonesia hindia sal priadi', color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30' },
@@ -48,9 +50,17 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({ onOpen
   const handleCategoryClick = async (category: typeof MOOD_CATEGORIES[0]) => {
     setLoadingCategory(category.name);
     try {
-      const results = await searchYouTubeMusic(category.query);
-      if (results.length > 0) {
-        playTrack(results[0], results);
+      if (category.name === 'Vanz Team Music Originals') {
+        const vanzTracks = getVanzTeamTracks();
+        if (vanzTracks.length > 0) {
+          playTrack(vanzTracks[0], vanzTracks);
+          return;
+        }
+      }
+      const ytTracks = await searchYouTubeMusic(category.query);
+      if (ytTracks.length > 0) {
+        playTrack(ytTracks[0], ytTracks);
+        return;
       }
     } catch (err) {
       console.error(err);
@@ -207,7 +217,7 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({ onOpen
         </div>
 
         <div className="divide-y divide-white/[0.04] bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
-          {FALLBACK_TRENDING_TRACKS.map((track, idx) => {
+          {FALLBACK_TRENDING_TRACKS.slice(1, 10).map((track, idx) => {
             const isThisPlaying = currentTrack?.id === track.id && isPlaying;
             const isThisCurrent = currentTrack?.id === track.id;
 

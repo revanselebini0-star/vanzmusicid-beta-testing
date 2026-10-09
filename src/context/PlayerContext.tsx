@@ -12,7 +12,8 @@ import {
   addUserHistory,
   cacheTrackForOffline
 } from '../lib/indexedDB';
-import { FALLBACK_TRENDING_TRACKS } from '../lib/youtube';
+import { FALLBACK_APPLE_TRACKS as FALLBACK_TRENDING_TRACKS } from '../lib/appleMusic';
+import { DEFAULT_SPOTIFY_TRACKS, resolveFullAudioId } from '../lib/spotify';
 import { fetchRealTrackLyrics } from '../lib/lyricsService';
 import { 
   auth, 
@@ -31,6 +32,16 @@ import {
   toggleSongLikeCount, 
   ADMIN_EMAIL 
 } from '../lib/songLikeService';
+import { 
+  playAppleDrmSong, 
+  pauseAppleDrm, 
+  resumeAppleDrm, 
+  seekAppleDrm, 
+  setAppleDrmVolume, 
+  subscribeAppleDrmListeners,
+  detectDrmCapabilities,
+  AppleDrmStatus 
+} from '../lib/appleMusicKit';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -121,6 +132,19 @@ interface PlayerContextType {
   setDolbyMode: (mode: 'spatial' | 'cinema' | 'vocal' | 'bass') => void;
   isDolbyModalOpen: boolean;
   setDolbyModalOpen: (open: boolean) => void;
+
+  // Spotify Exclusive Mode
+  isSpotifyMode: boolean;
+  setSpotifyMode: (enabled: boolean) => void;
+  spotifyTrackId: string | null;
+
+  // Apple Music DRM Playback Support (FairPlay & Widevine)
+  isAppleDrmActive: boolean;
+  appleDrmStatus: AppleDrmStatus;
+  drmSystemName: string;
+  isAppleEmbedOpen: boolean;
+  setAppleEmbedOpen: (open: boolean) => void;
+  appleSongId: string | null;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -157,12 +181,12 @@ const getThemePalette = (track: Track | null) => {
 };
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [queue, setQueue] = useState<Track[]>(FALLBACK_TRENDING_TRACKS);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(DEFAULT_SPOTIFY_TRACKS[0]);
+  const [queue, setQueue] = useState<Track[]>(DEFAULT_SPOTIFY_TRACKS);
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(DEFAULT_SPOTIFY_TRACKS[0].durationSeconds || 231);
   const [volume, setVolumeState] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -175,10 +199,27 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
 
+  // Spotify Player Mode states (disabled by default, YouTube Data v3 active)
+  const [isSpotifyMode, setSpotifyMode] = useState<boolean>(false);
+  const [spotifyTrackId, setSpotifyTrackId] = useState<string | null>(null);
+  const isSpotifyPlayingRef = useRef<boolean>(false);
+  const spotifyCurrentTimeRef = useRef<number>(0);
+
+  // Apple Music DRM Playback states (FairPlay on Safari, Widevine on Chrome/Android)
+  const [isAppleDrmActive, setIsAppleDrmActive] = useState<boolean>(false);
+  const [appleDrmStatus, setAppleDrmStatus] = useState<AppleDrmStatus>('ready');
+  const [drmSystemName, setDrmSystemName] = useState<string>('FairPlay & Widevine');
+  const [isAppleEmbedOpen, setAppleEmbedOpen] = useState<boolean>(false);
+  const [appleSongId, setAppleSongId] = useState<string | null>(null);
+
   // YouTube Player instance & Refs
   const ytPlayerRef = useRef<any>(null);
   const ytContainerId = 'vanz-yt-player';
   const progressTimerRef = useRef<any>(null);
+
+  // Apple Music Native HTML5 Audio Element & Refs
+  const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
+  const htmlAudioConnectedRef = useRef<boolean>(false);
 
   // Mobile Background Playback & AudioSession Keepalive Refs
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -649,10 +690,103 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [activateAudioAnchor, deactivateAudioAnchor]);
 
+  // Native HTML5 Audio instance for Apple Music Direct Streams
+  useEffect(() => {
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.crossOrigin = 'anonymous';
+
+    audio.onplay = () => {
+      setIsPlaying(true);
+      setIsBuffering(false);
+      isUserPausedRef.current = false;
+      activateAudioAnchor();
+      startProgressTimer();
+    };
+
+    audio.onpause = () => {
+      if (!isUserPausedRef.current && document.hidden && wasPlayingBeforeHiddenRef.current) {
+        audio.play().catch(() => {});
+        return;
+      }
+      setIsPlaying(false);
+      setIsBuffering(false);
+      deactivateAudioAnchor();
+      stopProgressTimer();
+    };
+
+    audio.onwaiting = () => {
+      setIsBuffering(true);
+    };
+
+    audio.onplaying = () => {
+      setIsBuffering(false);
+    };
+
+    audio.ontimeupdate = () => {
+      if (audio.currentTime) {
+        setCurrentTime(audio.currentTime);
+      }
+      if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
+    };
+
+    audio.onended = () => {
+      handleTrackEnded();
+    };
+
+    audio.onerror = (e) => {
+      console.warn("Apple Music audio stream notice:", e);
+      setIsBuffering(false);
+    };
+
+    htmlAudioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [activateAudioAnchor, deactivateAudioAnchor]);
+
   const startProgressTimer = () => {
     stopProgressTimer();
     progressTimerRef.current = setInterval(() => {
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
+      if (isSpotifyMode || isSpotifyPlayingRef.current) {
+        spotifyCurrentTimeRef.current += 0.25;
+        const cur = spotifyCurrentTimeRef.current;
+        const dur = currentTrack?.durationSeconds || 210;
+        setCurrentTime(cur);
+        setDuration(dur);
+        if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: Math.max(0, dur),
+              playbackRate: 1,
+              position: Math.min(dur, Math.max(0, cur))
+            });
+          } catch {}
+        }
+        if (cur >= dur) {
+          handleTrackEnded();
+        }
+      } else if (htmlAudioRef.current && htmlAudioRef.current.src && !htmlAudioRef.current.paused) {
+        const cur = htmlAudioRef.current.currentTime || 0;
+        const dur = htmlAudioRef.current.duration || 0;
+        setCurrentTime(cur);
+        if (dur > 0 && !isNaN(dur)) {
+          setDuration(dur);
+          if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
+            try {
+              navigator.mediaSession.setPositionState({
+                duration: Math.max(0, dur),
+                playbackRate: 1,
+                position: Math.min(dur, Math.max(0, cur))
+              });
+            } catch {}
+          }
+        }
+      } else if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
         const cur = ytPlayerRef.current.getCurrentTime() || 0;
         const dur = ytPlayerRef.current.getDuration() || 0;
         setCurrentTime(cur);
@@ -669,7 +803,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
       }
-    }, 250);
+    }, 100);
   };
 
   const stopProgressTimer = () => {
@@ -707,10 +841,124 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     cacheTrackForOffline(track);
     getUserHistory(uid).then(setHistory);
 
-    // Load video in YouTube player
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
+    // Play via Apple Music DRM (FairPlay / Widevine), Direct Audio, Spotify Direct, or YouTube
+    const rawAppleId = track.appleSongId || (track.id.startsWith('apple_') ? track.id.replace('apple_', '') : null);
+
+    if (track.source === 'apple' || track.isDrmProtected || track.id.startsWith('apple_')) {
+      const appleId = rawAppleId || track.id.replace('apple_', '');
+      setAppleSongId(appleId);
+
+      try {
+        ytPlayerRef.current?.pauseVideo?.();
+        ytPlayerRef.current?.stopVideo?.();
+      } catch {}
+
+      setSpotifyTrackId(null);
+      isSpotifyPlayingRef.current = false;
+      stopProgressTimer();
+
+      // Trigger Apple Music DRM playback (FairPlay / Widevine) via MusicKit JS
+      setIsBuffering(true);
+      setAppleDrmStatus('authenticating');
+
+      playAppleDrmSong(appleId).then((success) => {
+        setIsBuffering(false);
+        if (success) {
+          setIsAppleDrmActive(true);
+          setAppleDrmStatus('drm_playing');
+          setIsPlaying(true);
+          isUserPausedRef.current = false;
+          activateAudioAnchor();
+          initWebAudioAtmos();
+        } else {
+          // Seamless fallback to high-definition AAC preview stream
+          setIsAppleDrmActive(false);
+          setAppleDrmStatus('drm_ready');
+          if (htmlAudioRef.current && track.audioUrl) {
+            htmlAudioRef.current.pause();
+            htmlAudioRef.current.src = track.audioUrl;
+            htmlAudioRef.current.volume = isMuted ? 0 : volume;
+            htmlAudioRef.current.play().catch(e => {
+              console.warn("Direct audio playback notice:", e);
+            });
+            setIsPlaying(true);
+            isUserPausedRef.current = false;
+            activateAudioAnchor();
+            initWebAudioAtmos();
+          }
+        }
+      }).catch((e) => {
+        setIsBuffering(false);
+        console.warn("MusicKit DRM player exception, fallback to direct audio:", e);
+        setIsAppleDrmActive(false);
+        setAppleDrmStatus('drm_ready');
+        if (htmlAudioRef.current && track.audioUrl) {
+          htmlAudioRef.current.pause();
+          htmlAudioRef.current.src = track.audioUrl;
+          htmlAudioRef.current.volume = isMuted ? 0 : volume;
+          htmlAudioRef.current.play().catch(() => {});
+          setIsPlaying(true);
+          isUserPausedRef.current = false;
+          activateAudioAnchor();
+          initWebAudioAtmos();
+        }
+      });
+      setCurrentTime(0);
+      setDuration(track.durationSeconds || 240);
+    } else if (track.audioUrl || track.source === 'vanz' || track.source === 'cloudinary') {
+      try {
+        ytPlayerRef.current?.pauseVideo?.();
+        ytPlayerRef.current?.stopVideo?.();
+      } catch {}
+
+      setSpotifyTrackId(null);
+      isSpotifyPlayingRef.current = false;
+      setIsAppleDrmActive(false);
+      setAppleSongId(null);
+      stopProgressTimer();
+
+      if (htmlAudioRef.current && track.audioUrl) {
+        htmlAudioRef.current.pause();
+        htmlAudioRef.current.src = track.audioUrl;
+        htmlAudioRef.current.volume = isMuted ? 0 : volume;
+        htmlAudioRef.current.play().catch(e => {
+          console.warn("Audio play prevented or error:", e);
+        });
+      }
+      setIsPlaying(true);
+      isUserPausedRef.current = false;
+      setCurrentTime(0);
+      setDuration(track.durationSeconds || 240);
+      activateAudioAnchor();
+      initWebAudioAtmos();
+    } else if (isSpotifyMode || track.source === 'spotify' || track.id.startsWith('sp_')) {
+      try {
+        ytPlayerRef.current?.pauseVideo?.();
+        ytPlayerRef.current?.stopVideo?.();
+      } catch {}
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+        htmlAudioRef.current.src = '';
+      }
+
+      const spId = track.id.startsWith('sp_') ? track.id.replace('sp_', '') : track.id;
+      setSpotifyTrackId(spId);
+      setIsPlaying(true);
+      isSpotifyPlayingRef.current = true;
+      spotifyCurrentTimeRef.current = 0;
+      setCurrentTime(0);
+      setDuration(track.durationSeconds || 210);
+      activateAudioAnchor();
+      startProgressTimer();
+      initWebAudioAtmos();
+    } else if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+        htmlAudioRef.current.src = '';
+      }
+
       ytPlayerRef.current.loadVideoById({
-        videoId: track.id,
+        videoId: track.youtubeId || track.id,
         suggestedQuality: 'small'
       });
       setIsPlaying(true);
@@ -771,16 +1019,40 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
+    if (isAppleDrmActive) {
+      if (isPlaying) {
+        pauseAppleDrm();
+        setIsPlaying(false);
+        isUserPausedRef.current = true;
+        deactivateAudioAnchor();
+      } else {
+        resumeAppleDrm();
+        setIsPlaying(true);
+        isUserPausedRef.current = false;
+        activateAudioAnchor();
+      }
+      return;
+    }
+
     if (isPlaying) {
       isUserPausedRef.current = true;
       wasPlayingBeforeHiddenRef.current = false;
-      ytPlayerRef.current?.pauseVideo?.();
+      isSpotifyPlayingRef.current = false;
+      if (currentTrack.audioUrl && htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+      } else if (ytPlayerRef.current) {
+        ytPlayerRef.current?.pauseVideo?.();
+      }
       setIsPlaying(false);
       deactivateAudioAnchor();
       stopProgressTimer();
     } else {
       isUserPausedRef.current = false;
-      ytPlayerRef.current?.playVideo?.();
+      if (currentTrack.audioUrl && htmlAudioRef.current) {
+        htmlAudioRef.current.play().catch(() => {});
+      } else if (ytPlayerRef.current) {
+        ytPlayerRef.current?.playVideo?.();
+      }
       setIsPlaying(true);
       activateAudioAnchor();
       initWebAudioAtmos();
@@ -793,7 +1065,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (repeatMode === 'one' && currentTrack) {
       seekTo(0);
-      ytPlayerRef.current?.playVideo?.();
+      if (currentTrack.audioUrl && htmlAudioRef.current) {
+        htmlAudioRef.current.play().catch(() => {});
+      } else if (ytPlayerRef.current) {
+        ytPlayerRef.current?.playVideo?.();
+      }
       return;
     }
 
@@ -829,7 +1105,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const handleTrackEnded = () => {
     if (repeatMode === 'one') {
       seekTo(0);
-      ytPlayerRef.current?.playVideo?.();
+      if (currentTrack?.audioUrl && htmlAudioRef.current) {
+        htmlAudioRef.current.play().catch(() => {});
+      } else if (ytPlayerRef.current) {
+        ytPlayerRef.current?.playVideo?.();
+      }
     } else {
       playNext();
     }
@@ -837,10 +1117,50 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const seekTo = (seconds: number) => {
     setCurrentTime(seconds);
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
+    spotifyCurrentTimeRef.current = seconds;
+    if (isAppleDrmActive) {
+      seekAppleDrm(seconds);
+    }
+    if (currentTrack?.audioUrl && htmlAudioRef.current) {
+      try {
+        htmlAudioRef.current.currentTime = seconds;
+      } catch {}
+    } else if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
       ytPlayerRef.current.seekTo(seconds, true);
     }
   };
+
+  // Detect Apple Music DRM capabilities (FairPlay / Widevine) & subscribe to MusicKit events
+  useEffect(() => {
+    detectDrmCapabilities().then((sys) => {
+      if (sys === 'fairplay') {
+        setDrmSystemName('Apple FairPlay Streaming DRM');
+      } else if (sys === 'widevine') {
+        setDrmSystemName('Widevine Modular DRM');
+      } else {
+        setDrmSystemName('Apple Web DRM');
+      }
+    });
+
+    const unsub = subscribeAppleDrmListeners({
+      onStateChange: (playing, state) => {
+        setIsPlaying(playing);
+        setIsBuffering(state === 'waiting' || state === 'loading');
+      },
+      onTimeChange: (cur, dur) => {
+        if (cur > 0) setCurrentTime(cur);
+        if (dur > 0 && !isNaN(dur)) setDuration(dur);
+      },
+      onTrackEnd: () => {
+        playNext();
+      },
+      onError: (err) => {
+        console.warn("MusicKit DRM player notice:", err);
+      }
+    });
+
+    return () => unsub();
+  }, [playNext]);
 
   // Sync MediaSession metadata (Title, Artist, Album, Cover Art, Playback State)
   const updateMediaSession = useCallback((track: Track | null, playing: boolean) => {
@@ -1005,10 +1325,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setVolume = (val: number) => {
     setVolumeState(val);
+    setAppleDrmVolume(val);
     if (val === 0) {
       setIsMuted(true);
     } else if (isMuted) {
       setIsMuted(false);
+    }
+    if (htmlAudioRef.current) {
+      htmlAudioRef.current.volume = val;
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
       ytPlayerRef.current.setVolume(Math.round(val * 100));
@@ -1018,10 +1342,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleMute = () => {
     if (isMuted) {
       setIsMuted(false);
+      setAppleDrmVolume(volume);
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.muted = false;
+        htmlAudioRef.current.volume = volume;
+      }
       ytPlayerRef.current?.unMute?.();
       ytPlayerRef.current?.setVolume?.(Math.round(volume * 100));
     } else {
       setIsMuted(true);
+      setAppleDrmVolume(0);
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.muted = true;
+      }
       ytPlayerRef.current?.mute?.();
     }
   };
@@ -1188,6 +1521,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setDolbyMode,
         isDolbyModalOpen,
         setDolbyModalOpen,
+
+        isSpotifyMode,
+        setSpotifyMode,
+        spotifyTrackId,
+
+        isAppleDrmActive,
+        appleDrmStatus,
+        drmSystemName,
+        isAppleEmbedOpen,
+        setAppleEmbedOpen,
+        appleSongId,
       }}
     >
       {children}

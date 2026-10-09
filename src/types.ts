@@ -9,6 +9,15 @@ export interface Track {
   viewCount?: string;
   publishedAt?: string;
   lyrics?: LyricLine[];
+  audioUrl?: string;
+  source?: 'apple' | 'youtube' | 'spotify' | 'vanz' | 'cloudinary';
+  youtubeId?: string;
+  albumName?: string;
+  artistImage?: string;
+  cloudinaryPublicId?: string;
+  appleSongId?: string;
+  isDrmProtected?: boolean;
+  audioTraits?: string[];
 }
 
 export interface LyricLine {

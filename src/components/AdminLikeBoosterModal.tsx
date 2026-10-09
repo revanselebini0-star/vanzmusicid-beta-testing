@@ -39,7 +39,7 @@ import {
   type CommunityVoteItem,
   type CommunityReply
 } from '../lib/voteService';
-import { FALLBACK_TRENDING_TRACKS, searchYouTubeMusic } from '../lib/youtube';
+import { FALLBACK_APPLE_TRACKS as FALLBACK_TRENDING_TRACKS, searchAppleMusic as searchYouTubeMusic } from '../lib/appleMusic';
 import { AdminVerifiedBadge } from './AdminVerifiedBadge';
 
 export type AdminBoosterTab = 'voting' | 'comments' | 'song';

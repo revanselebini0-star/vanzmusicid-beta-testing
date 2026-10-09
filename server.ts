@@ -381,6 +381,288 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 });
 
+// Apple Music API Proxy Routes (with Authorization Bearer & media-user-token)
+const APPLE_MUSIC_DEVELOPER_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6IldlYlBsYXlLaWQifQ.eyJpc3MiOiJBTVBXZWJQbGF5IiwiaWF0IjoxNzg5Njg4NzA5LCJleHAiOjE3OTU3MzY3MDksInJvb3RfaHR0cHNfb3JpZ2luIjpbImFwcGxlLmNvbSJdfQ.y0gd6YWyrUrZx-YZNZS0xVHkDHGr-kGZ9RrsWRfApGc2-_NNC968VsD36hRU33s5BBs4KdB7LIZTmYqPra097Q";
+const APPLE_MUSIC_USER_TOKEN = "0.Av0K6mWqgzpF4QsqpkmAOKV12SzAVeeni/5TeYykuGyLH7TlxL0nWa8SocoyTDkGfTXeqmJcwftazpPhdxSriwNBxX9XbzhS4ONwpEHM1eKHpTpJYeZ2nB0QT0dIolmxgeU7VKVId8IKhaeBk7HMgOWRxJH6mscMnXBFgfLHjrXjOc7KRiq8EnHvye27UB3s3nlcck8qoVHcn7FaaPnvY4QNXJqgIerLHbTOxevkxcpCZQcICA==";
+
+app.get('/api/apple-music/charts', async (req, res) => {
+  const storefront = (req.query.storefront as string) || 'id';
+  const limit = (req.query.limit as string) || '30';
+  try {
+    const response = await fetch(`https://amp-api.music.apple.com/v1/catalog/${storefront}/charts?types=songs&limit=${limit}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${APPLE_MUSIC_DEVELOPER_TOKEN}`,
+        'media-user-token': APPLE_MUSIC_USER_TOKEN,
+        'Music-User-Token': APPLE_MUSIC_USER_TOKEN,
+        'Origin': 'https://music.apple.com',
+        'Referer': 'https://music.apple.com/'
+      }
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Apple API status ${response.status}` });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('Apple Music Charts proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/apple-music/search', async (req, res) => {
+  const term = req.query.term as string;
+  const storefront = (req.query.storefront as string) || 'id';
+  const limit = (req.query.limit as string) || '25';
+  if (!term) {
+    return res.status(400).json({ error: 'term query is required' });
+  }
+  try {
+    const response = await fetch(`https://amp-api.music.apple.com/v1/catalog/${storefront}/search?term=${encodeURIComponent(term)}&types=songs,albums,artists&limit=${limit}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${APPLE_MUSIC_DEVELOPER_TOKEN}`,
+        'media-user-token': APPLE_MUSIC_USER_TOKEN,
+        'Music-User-Token': APPLE_MUSIC_USER_TOKEN,
+        'Origin': 'https://music.apple.com',
+        'Referer': 'https://music.apple.com/'
+      }
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Apple API status ${response.status}` });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('Apple Music Search proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/apple-music/song/:id', async (req, res) => {
+  const songId = req.params.id;
+  const storefront = (req.query.storefront as string) || 'id';
+  try {
+    const response = await fetch(`https://amp-api.music.apple.com/v1/catalog/${storefront}/songs/${songId}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${APPLE_MUSIC_DEVELOPER_TOKEN}`,
+        'media-user-token': APPLE_MUSIC_USER_TOKEN,
+        'Music-User-Token': APPLE_MUSIC_USER_TOKEN,
+        'Origin': 'https://music.apple.com',
+        'Referer': 'https://music.apple.com/'
+      }
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Apple API status ${response.status}` });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('Apple Music Song proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/apple-music/drm-status', (_req, res) => {
+  res.json({
+    status: 'active',
+    drmSupported: true,
+    systems: ['FairPlay Streaming (com.apple.fps)', 'Widevine Modular (com.widevine.alpha)'],
+    hasDeveloperToken: Boolean(APPLE_MUSIC_DEVELOPER_TOKEN),
+    hasMediaUserToken: Boolean(APPLE_MUSIC_USER_TOKEN),
+    catalogRegion: 'id'
+  });
+});
+
+// YouTube Music Search Proxy (direct high-accuracy YouTube scrape, no quota 403 limits)
+app.get('/api/youtube/search', async (req, res) => {
+  const query = (req.query.q as string || '').trim();
+  if (!query) {
+    return res.json([]);
+  }
+
+  try {
+    const resYt = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+    const html = await resYt.text();
+    const match = html.match(/var ytInitialData = ({.*?});<\/script>/);
+    if (!match) {
+      return res.json([]);
+    }
+    const data = JSON.parse(match[1]);
+    const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const results: any[] = [];
+    
+    for (const sec of sections) {
+      const contents = sec?.itemSectionRenderer?.contents || [];
+      for (const item of contents) {
+        if (item.videoRenderer) {
+          const v = item.videoRenderer;
+          if (!v.videoId) continue;
+          
+          const rawTitle = v.title?.runs?.[0]?.text || '';
+          let title = rawTitle;
+          let artist = v.ownerText?.runs?.[0]?.text || 'Artis Populer';
+          
+          if (title.includes(' - ')) {
+            const parts = title.split(' - ');
+            if (parts.length >= 2) {
+              artist = parts[0].replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+              title = parts.slice(1).join(' - ').replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+            }
+          }
+          title = title
+            .replace(/\(.*?\)/g, '')
+            .replace(/\[.*?\]/g, '')
+            .replace(/Official (Music )?Video/gi, '')
+            .replace(/Lyric(s)? Video/gi, '')
+            .replace(/HD|4K/gi, '')
+            .trim() || rawTitle;
+
+          const duration = v.lengthText?.simpleText || '3:30';
+          let durationSeconds = 210;
+          if (duration) {
+            const parts = duration.split(':').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              durationSeconds = parts[0] * 60 + parts[1];
+            } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+              durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
+          }
+
+          results.push({
+            id: v.videoId,
+            title,
+            artist,
+            channelTitle: v.ownerText?.runs?.[0]?.text || artist,
+            thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+            duration,
+            durationSeconds,
+            viewCount: v.viewCountText?.simpleText || ''
+          });
+        }
+      }
+    }
+
+    res.json(results.slice(0, 30));
+  } catch (err: any) {
+    console.error('YouTube search proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// YouTube Trending Music Proxy
+app.get('/api/youtube/trending', async (req, res) => {
+  try {
+    const resYt = await fetch(`https://www.youtube.com/results?search_query=lagu+indonesia+populer+trending+viral`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+    const html = await resYt.text();
+    const match = html.match(/var ytInitialData = ({.*?});<\/script>/);
+    if (!match) {
+      return res.json([]);
+    }
+    const data = JSON.parse(match[1]);
+    const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const results: any[] = [];
+    
+    for (const sec of sections) {
+      const contents = sec?.itemSectionRenderer?.contents || [];
+      for (const item of contents) {
+        if (item.videoRenderer) {
+          const v = item.videoRenderer;
+          if (!v.videoId) continue;
+          
+          const rawTitle = v.title?.runs?.[0]?.text || '';
+          let title = rawTitle;
+          let artist = v.ownerText?.runs?.[0]?.text || 'Artis Populer';
+          
+          if (title.includes(' - ')) {
+            const parts = title.split(' - ');
+            if (parts.length >= 2) {
+              artist = parts[0].replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+              title = parts.slice(1).join(' - ').replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+            }
+          }
+          title = title
+            .replace(/\(.*?\)/g, '')
+            .replace(/\[.*?\]/g, '')
+            .replace(/Official (Music )?Video/gi, '')
+            .replace(/Lyric(s)? Video/gi, '')
+            .trim() || rawTitle;
+
+          const duration = v.lengthText?.simpleText || '3:30';
+          let durationSeconds = 210;
+          if (duration) {
+            const parts = duration.split(':').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              durationSeconds = parts[0] * 60 + parts[1];
+            } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+              durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
+          }
+
+          results.push({
+            id: v.videoId,
+            title,
+            artist,
+            channelTitle: v.ownerText?.runs?.[0]?.text || artist,
+            thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+            duration,
+            durationSeconds,
+            viewCount: v.viewCountText?.simpleText || ''
+          });
+        }
+      }
+    }
+
+    res.json(results.slice(0, 30));
+  } catch (err: any) {
+    console.error('YouTube trending proxy error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Vercel Backend Proxy for search and stream
+app.get('/api/proxy/search', async (req, res) => {
+  const query = req.query.q || 'trending music';
+  try {
+    const r = await fetch(`https://server-kappa-black-72.vercel.app/api/search?q=${encodeURIComponent(String(query))}`);
+    if (!r.ok) {
+      return res.json([]);
+    }
+    const data = await r.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('Vercel proxy search error:', err);
+    res.json([]);
+  }
+});
+
+app.get('/api/proxy/stream', async (req, res) => {
+  const id = req.query.id;
+  if (!id) return res.status(400).json({ error: 'Missing id' });
+  try {
+    const r = await fetch(`https://server-kappa-black-72.vercel.app/api/stream?id=${encodeURIComponent(String(id))}`);
+    if (!r.ok) {
+      return res.json({ urlAudioMurni: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', kualitas: 'fallback' });
+    }
+    const data = await r.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('Vercel proxy stream error:', err);
+    res.json({ urlAudioMurni: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', kualitas: 'fallback' });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

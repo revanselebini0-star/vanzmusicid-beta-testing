@@ -25,7 +25,7 @@ import {
   Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatViews } from '../lib/youtube';
+import { formatViews } from '../lib/musicService';
 import { LyricsSearchModal } from './LyricsSearchModal';
 import { AdminLikeBoosterModal } from './AdminLikeBoosterModal';
 import { subscribeSongLikes } from '../lib/songLikeService';
@@ -67,9 +67,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
     queue, 
     queueIndex,
     ytContainerId,
-    isAdmin,
-    isDolbyAtmos,
-    setDolbyModalOpen
+    isAdmin
   } = usePlayer();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -78,6 +76,16 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
   const [trackLikes, setTrackLikes] = useState<number>(0);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
+  const isUserScrollingRef = useRef<boolean>(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLyricsScroll = () => {
+    isUserScrollingRef.current = true;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 2500);
+  };
 
   // Subscribe to real-time song likes
   useEffect(() => {
@@ -103,21 +111,34 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
         break;
       }
     }
-    setActiveLyricIndex(foundIndex);
-
-    // Auto-scroll lyrics container smoothly
-    if (isLyricsOpen && lyricsContainerRef.current && foundIndex >= 0) {
-      const activeEl = lyricsContainerRef.current.children[foundIndex] as HTMLElement;
-      if (activeEl) {
-        const container = lyricsContainerRef.current;
-        const targetScroll = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
-        container.scrollTo({
-          top: Math.max(0, targetScroll),
-          behavior: 'smooth'
-        });
-      }
+    if (foundIndex !== activeLyricIndex) {
+      setActiveLyricIndex(foundIndex);
     }
-  }, [currentTime, lyrics, isLyricsOpen]);
+  }, [currentTime, lyrics, activeLyricIndex]);
+
+  // Auto-scroll lyrics container smoothly to center active line
+  useEffect(() => {
+    if (!isFullPlayerOpen || !lyricsContainerRef.current || activeLyricIndex < 0 || isUserScrollingRef.current) {
+      return;
+    }
+
+    const container = lyricsContainerRef.current;
+    const activeEl = container.querySelector(`[data-lyric-index="${activeLyricIndex}"]`) as HTMLElement;
+    if (activeEl) {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const targetScroll =
+        container.scrollTop +
+        (activeRect.top - containerRect.top) -
+        containerRect.height / 2 +
+        activeRect.height / 2;
+
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: 'smooth'
+      });
+    }
+  }, [activeLyricIndex, isFullPlayerOpen, isLyricsOpen, lyrics]);
 
   if (!currentTrack || !isFullPlayerOpen) return null;
 
@@ -152,7 +173,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
         </div>
 
         {/* Top App Bar Header */}
-        <header className="relative z-10 flex items-center justify-between px-6 pt-4 pb-2">
+        <header className="relative z-10 flex items-center justify-between px-6 pt-3 pb-0">
           <button
             id="close-full-player-btn"
             onClick={() => setFullPlayerOpen(false)}
@@ -162,26 +183,8 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
             <ChevronDown className="w-6 h-6 text-white/80" />
           </button>
 
-          {/* Center Title / Mode Switcher */}
-          <div className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-xs">
-            <button
-              onClick={() => setVideoMode(false)}
-              className={`px-2.5 py-1 rounded-full transition-all font-medium ${
-                !isVideoMode ? 'bg-white text-black shadow-sm' : 'text-white/70 hover:text-white'
-              }`}
-            >
-              Audio
-            </button>
-            <button
-              onClick={() => setVideoMode(true)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full transition-all font-medium ${
-                isVideoMode ? 'bg-[var(--theme-accent)] text-white shadow-sm shadow-[var(--theme-glow)]' : 'text-white/70 hover:text-white'
-              }`}
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>Video MV</span>
-            </button>
-          </div>
+          {/* Empty spacer to keep layout balanced */}
+          <div className="w-10" />
 
           <div className="flex items-center gap-2">
             <button
@@ -196,94 +199,133 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
           </div>
         </header>
 
-        {/* Main Content Area: Artwork, Lyrics, or Video */}
-        <div className="relative z-10 flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-14 py-2 sm:py-4 gap-4 sm:gap-8 min-h-0 overflow-hidden">
-          {/* Visual Canvas (Artwork or YouTube Video Frame) */}
-          <div className={`w-full max-w-[260px] sm:max-w-sm md:max-w-md max-h-[38vh] sm:max-h-none aspect-square flex items-center justify-center transition-all duration-300 ${
-            isLyricsOpen ? 'hidden md:flex md:w-1/2 md:max-w-xs' : 'flex'
-          }`}>
-            {isVideoMode ? (
-              <div className="w-full aspect-video rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/20 bg-black/80 flex flex-col items-center justify-center p-6 text-center">
-                <Tv className="w-10 h-10 text-[var(--theme-accent)] mb-2 animate-pulse" />
-                <p className="text-sm font-bold text-white">Pemutaran Video Musik Aktif</p>
-                <p className="text-xs text-white/60 mt-1">Video YouTube diputar secara langsung di layar</p>
-              </div>
-            ) : (
-              <div className="relative w-full h-full rounded-3xl overflow-hidden artwork-shadow ring-1 ring-white/10 group">
-                <img 
-                  src={currentTrack.thumbnail} 
-                  alt={currentTrack.title}
-                  referrerPolicy="no-referrer"
-                  className={`w-full h-full object-cover transition-transform duration-700 ${
-                    isPlaying ? 'scale-100' : 'scale-95 brightness-90'
-                  }`}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                  <span className="text-xs text-white/80 font-medium">{currentTrack.viewCount}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Synced Lyrics View */}
-          {isLyricsOpen && (
-            <div className="w-full md:w-1/2 h-full flex flex-col min-h-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <Quote className="w-4 h-4 text-[var(--theme-accent)]" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-white/80">
-                    Lirik Asli
-                  </span>
-
-                  {lyricsResult && lyricsResult.lyrics.length > 0 && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      <CheckCircle2 className="w-3 h-3" />
-                      {lyricsResult.isSynced ? 'Resmi Sinkron' : 'Teks Resmi'}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {isLoadingLyrics ? (
-                    <span className="text-[11px] text-[var(--theme-accent)] animate-pulse flex items-center gap-1.5 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-[var(--theme-accent)] animate-ping" />
-                      sabar ya !
-                    </span>
-                  ) : (
-                    <button
-                      id="search-lyrics-btn"
-                      onClick={() => setLyricsSearchModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-[var(--theme-accent)] hover:text-white text-white/80 border border-white/10 transition-all cursor-pointer"
-                      title="Cari atau ganti lirik jika belum akurat"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      <span>{lyrics.length > 0 ? 'Lirik Kurang Akurat? Cari' : 'Cari Lirik'}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
+        {/* Main Content Area: Cover Artwork or Synced Lyrics View */}
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 md:px-14 pt-0 pb-2 min-h-0 overflow-hidden">
+          {!isLyricsOpen ? (
+            /* Album Cover Artwork View (Default) */
+            <motion.div
+              key="artwork-view"
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: isPlaying ? 1 : 0.92 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 25 }}
+              onClick={() => setLyricsOpen(true)}
+              className="relative w-full max-w-[300px] sm:max-w-[340px] md:max-w-[380px] aspect-square rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.75)] border border-white/15 cursor-pointer group"
+              title="Ketuk untuk melihat lirik"
+            >
+              <img
+                src={currentTrack.thumbnail}
+                alt={currentTrack.title}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </motion.div>
+          ) : (
+            /* Synced Lyrics View */
+            <div className="w-full max-w-2xl h-full flex flex-col min-h-0">
               <div 
                 ref={lyricsContainerRef}
-                className="flex-1 overflow-y-auto pr-3 space-y-5 py-6 mask-gradient-y scroll-smooth"
+                onScroll={handleLyricsScroll}
+                className="relative flex-1 overflow-y-auto pr-3 space-y-6 py-[35vh] mask-gradient-y scroll-smooth no-scrollbar"
               >
                 {lyrics.length > 0 ? (
                   lyrics.map((line, idx) => {
                     const isActive = idx === activeLyricIndex;
                     const isPast = idx < activeLyricIndex;
+                    const isInstrumental = line.text === '•••';
+
+                    // Calculate vocal progress percentage for the active line
+                    let vocalProgress = 0;
+                    if (isActive) {
+                      const currentLineTime = line.time;
+                      const nextLineTime = lyrics[idx + 1] ? lyrics[idx + 1].time : (currentLineTime + 3.8);
+                      const lineDuration = Math.max(0.6, nextLineTime - currentLineTime);
+                      const timeIntoLine = Math.max(0, currentTime - currentLineTime);
+                      vocalProgress = Math.min(100, Math.max(0, (timeIntoLine / lineDuration) * 100));
+                    } else if (isPast) {
+                      vocalProgress = 100;
+                    }
+
+                    // Hide past instrumental dots completely so they don't leave blank gaps above
+                    if (isInstrumental && !isActive) {
+                      return (
+                        <div
+                          key={`${line.time}-${idx}`}
+                          data-lyric-index={idx}
+                          className="h-0 overflow-hidden opacity-0 pointer-events-none"
+                        />
+                      );
+                    }
+
                     return (
                       <div
                         key={`${line.time}-${idx}`}
-                        onClick={() => seekTo(line.time)}
-                        className={`cursor-pointer transition-all duration-300 transform origin-left select-none ${
+                        data-lyric-index={idx}
+                        onClick={() => {
+                          isUserScrollingRef.current = false;
+                          seekTo(line.time);
+                        }}
+                        className={`group relative cursor-pointer transition-all duration-500 ease-out select-none py-1.5 px-3 rounded-2xl ${
                           isActive 
-                            ? 'text-white text-2xl md:text-3xl font-extrabold scale-105 filter drop-shadow-[0_4px_12px_var(--theme-glow)]' 
+                            ? 'scale-[1.04] translate-x-2 md:translate-x-3' 
                             : isPast 
-                              ? 'text-white/40 text-lg md:text-xl font-semibold hover:text-white/70' 
-                              : 'text-white/20 text-lg md:text-xl font-semibold hover:text-white/60'
+                              ? 'scale-100 translate-x-0 pointer-events-none' 
+                              : 'scale-[0.98] translate-x-0 hover:text-white/60'
                         }`}
                       >
-                        {line.text}
+                        {isInstrumental ? (
+                          /* Three aligned dots (titik 3 sejajar) for Intro / Instrumental / Non-vocal parts */
+                          <div className="flex items-center gap-3 py-2">
+                            {[0, 1, 2].map((dotIdx) => {
+                              // Each dot fills up sequentially from 0->33%, 33->66%, 66->100%
+                              const dotStart = dotIdx * 33.33;
+                              const dotFill = Math.min(1, Math.max(0, (vocalProgress - dotStart) / 33.33));
+                              return (
+                                <span
+                                  key={dotIdx}
+                                  style={{
+                                    opacity: 0.25 + dotFill * 0.75,
+                                    transform: `scale(${0.85 + dotFill * 0.3})`,
+                                    boxShadow: dotFill > 0.5 ? '0 0 12px rgba(255,255,255,0.75)' : 'none'
+                                  }}
+                                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-white transition-all duration-200"
+                                />
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          /* Animated Vocal Slide Text (Apple Music karaoke illumination) */
+                          <div
+                            style={
+                              isActive
+                                ? {
+                                    backgroundImage: `linear-gradient(90deg, #ffffff 0%, #ffffff ${vocalProgress}%, rgba(255, 255, 255, 0.4) ${Math.min(100, vocalProgress + 15)}%, rgba(255, 255, 255, 0.2) 100%)`,
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))'
+                                  }
+                                : isPast
+                                ? {
+                                    opacity: 0,
+                                    filter: 'blur(6px)',
+                                    pointerEvents: 'none'
+                                  }
+                                : {
+                                    color: 'rgba(255, 255, 255, 0.45)',
+                                    filter: 'blur(6px)'
+                                  }
+                            }
+                            className={`font-black tracking-tight leading-relaxed transition-all duration-300 ${
+                              isActive
+                                ? 'text-2xl sm:text-3xl md:text-4xl text-white'
+                                : isPast
+                                ? 'text-lg sm:text-xl md:text-2xl font-bold opacity-0'
+                                : 'text-lg sm:text-xl md:text-2xl font-bold'
+                            }`}
+                          >
+                            {line.text}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -365,19 +407,6 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
                 <p className="text-sm md:text-base text-white/70 truncate">
                   {currentTrack.artist}
                 </p>
-                <button
-                  id="full-player-dolby-btn"
-                  onClick={() => setDolbyModalOpen(true)}
-                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider transition-colors cursor-pointer border ${
-                    isDolbyAtmos
-                      ? 'bg-white/10 hover:bg-white/15 border-white/20 text-white'
-                      : 'bg-transparent hover:bg-white/5 border-white/10 text-white/40'
-                  }`}
-                  title="Pengaturan Dolby Atmos"
-                >
-                  <span className="font-serif font-black tracking-tighter text-[11px] leading-none">DO</span>
-                  <span className="text-[9px] font-bold tracking-wide">ATMOS</span>
-                </button>
               </div>
             </div>
 
@@ -427,6 +456,7 @@ export const FullPlayerModal: React.FC<FullPlayerModalProps> = ({ onAddToPlaylis
               </button>
             </div>
           </div>
+
 
           {/* Interactive Scrub Bar */}
           <div className="space-y-1">

@@ -2,6 +2,59 @@ import { LyricLine, LyricsResult, LyricsSearchCandidate } from '../types';
 import { CURATED_OFFLINE_LYRICS } from './curatedLyrics';
 import { getSavedLyrics, saveCustomLyrics } from './indexedDB';
 
+// Helper to insert Apple Music-style 3-dot ('•••') markers for intros and long instrumental gaps
+export function withInstrumentalMarkers(rawLines: LyricLine[]): LyricLine[] {
+  if (!rawLines || rawLines.length === 0) return [];
+
+  const sorted = [...rawLines].sort((a, b) => a.time - b.time);
+  const result: LyricLine[] = [];
+
+  const isDotLine = (text: string) =>
+    text === '•••' ||
+    text === '...' ||
+    text === '…' ||
+    /^[\s♪♫•.…*-]+$/.test(text) ||
+    /^\[?(intro|instrumental|musik|music|interlude|outro|solo)\]?$/i.test(text.trim());
+
+  // 1. Add intro marker at 0s if the first vocal starts after 1.5s and isn't already a dot marker
+  if (sorted[0].time > 1.5 && !isDotLine(sorted[0].text)) {
+    result.push({ time: 0, text: '•••' });
+  }
+
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i];
+    const normalizedText = isDotLine(current.text) ? '•••' : current.text;
+
+    // Avoid duplicate consecutive '•••' lines
+    if (normalizedText === '•••' && result.length > 0 && result[result.length - 1].text === '•••') {
+      continue;
+    }
+
+    result.push({
+      time: current.time,
+      text: normalizedText
+    });
+
+    // 2. Check if there is a long instrumental gap before the next line
+    const next = sorted[i + 1];
+    if (next && normalizedText !== '•••' && !isDotLine(next.text)) {
+      const gap = next.time - current.time;
+      // Estimate normal singing time based on word count (~0.45s per word, min 3s, max 5.5s)
+      const wordCount = normalizedText.split(/\s+/).filter(Boolean).length;
+      const estimatedVocalDuration = Math.min(5.5, Math.max(3.0, wordCount * 0.45));
+      // If silent gap after estimated singing is at least 4.5s (total gap >= ~8s), insert '•••'
+      if (gap - estimatedVocalDuration >= 4.5) {
+        result.push({
+          time: Number((current.time + estimatedVocalDuration).toFixed(2)),
+          text: '•••'
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
 // Parse standard LRC format string: "[mm:ss.xx] lyric line text"
 export function parseLRC(lrcText: string): LyricLine[] {
   if (!lrcText || typeof lrcText !== 'string') return [];
@@ -16,17 +69,27 @@ export function parseLRC(lrcText: string): LyricLine[] {
       const mins = parseInt(match[1], 10);
       const secs = parseFloat(match[2]);
       const text = match[3].trim();
-      // Skip empty headers like "[length: 03:45]" or blank lines
-      if (text && !text.startsWith('ar:') && !text.startsWith('ti:') && !text.startsWith('al:')) {
+      // Skip metadata headers like "[ar:...]"
+      if (text.startsWith('ar:') || text.startsWith('ti:') || text.startsWith('al:') || text.startsWith('by:')) {
+        continue;
+      }
+      const timeVal = Number((mins * 60 + secs).toFixed(2));
+      if (text) {
         result.push({
-          time: Number((mins * 60 + secs).toFixed(2)),
+          time: timeVal,
           text: text
+        });
+      } else {
+        // Blank timestamped line in LRC represents end of vocal / instrumental break
+        result.push({
+          time: timeVal,
+          text: '•••'
         });
       }
     }
   }
 
-  return result.sort((a, b) => a.time - b.time);
+  return withInstrumentalMarkers(result);
 }
 
 // Convert plain un-synced text lyrics into evenly spaced lyric lines based on duration
@@ -44,10 +107,12 @@ export function convertPlainLyricsToLines(plainText: string, durationSeconds = 2
   const effectiveDuration = Math.max(20, durationSeconds - startOffset - 15);
   const timeStep = effectiveDuration / lines.length;
 
-  return lines.map((text, idx) => ({
+  const rawLines = lines.map((text, idx) => ({
     time: Number((startOffset + idx * timeStep).toFixed(1)),
     text
   }));
+
+  return withInstrumentalMarkers(rawLines);
 }
 
 // Clean title and artist to increase match rate on LRCLIB and lyrics databases
@@ -95,7 +160,10 @@ export async function fetchRealTrackLyrics(
     try {
       const saved = await getSavedLyrics(trackId);
       if (saved && saved.lyrics.length > 0) {
-        return saved;
+        return {
+          ...saved,
+          lyrics: withInstrumentalMarkers(saved.lyrics)
+        };
       }
     } catch (e) {
       console.warn("Could not load saved lyrics:", e);
@@ -114,7 +182,7 @@ export async function fetchRealTrackLyrics(
         artist: item.artist,
         isSynced: true,
         source: 'curated_synced',
-        lyrics: item.lyrics
+        lyrics: withInstrumentalMarkers(item.lyrics)
       };
     }
   }

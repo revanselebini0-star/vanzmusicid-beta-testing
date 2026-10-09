@@ -8,7 +8,7 @@ import {
   User as UserIcon,
   Music2
 } from 'lucide-react';
-import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
+import { HomeIcon, AccountIcon } from './icons/CustomIcons';
 import { AdminVerifiedBadge } from './AdminVerifiedBadge';
 import { ViewTab } from '../types';
 
@@ -28,12 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   const navItems: { id: ViewTab; label: string; icon?: any; image?: string }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
     { id: 'search', label: 'Cari', icon: Search },
-    { id: 'recommendations', label: 'Rekomendasi', icon: RecommendationIcon },
-    { 
-      id: 'vanzupdate', 
-      label: 'Vanz Update', 
-      image: 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png' 
-    },
     { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 

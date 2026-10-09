@@ -35,9 +35,7 @@ export const MiniPlayer: React.FC = () => {
     currentTime,
     duration,
     seekTo,
-    isBottomBarsVisible,
-    isDolbyAtmos,
-    setDolbyModalOpen
+    isBottomBarsVisible
   } = usePlayer();
 
   const [isSeeking, setIsSeeking] = useState(false);
@@ -218,20 +216,8 @@ export const MiniPlayer: React.FC = () => {
 
         <div className="h-5 w-[1px] bg-white/10 mx-0.5" />
 
-        {/* Action Buttons (Dolby Atmos, Lyrics, More, Queue) */}
+        {/* Action Buttons (Lyrics, More, Queue) - Clean without indicators */}
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => setDolbyModalOpen(true)}
-            className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold tracking-wider transition-colors cursor-pointer border ${
-              isDolbyAtmos
-                ? 'bg-white/10 hover:bg-white/15 border-white/20 text-white'
-                : 'bg-transparent hover:bg-white/5 border-white/10 text-white/40'
-            }`}
-            title="Pengaturan Dolby Atmos"
-          >
-            ATMOS
-          </button>
-
           <button
             onClick={() => {
               setLyricsOpen(true);

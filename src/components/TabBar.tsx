@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { Search } from 'lucide-react';
-import { HomeIcon, RecommendationIcon, AccountIcon } from './icons/CustomIcons';
+import { HomeIcon, AccountIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
 export const TabBar: React.FC = () => {
@@ -9,13 +9,7 @@ export const TabBar: React.FC = () => {
 
   const tabs: { id: ViewTab; label: string; icon?: any; image?: string }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
-    { id: 'recommendations', label: 'Rekomendasi', icon: RecommendationIcon },
     { id: 'search', label: 'Cari', icon: Search },
-    { 
-      id: 'vanzupdate', 
-      label: 'vanzupdate', 
-      image: 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png' 
-    },
     { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 

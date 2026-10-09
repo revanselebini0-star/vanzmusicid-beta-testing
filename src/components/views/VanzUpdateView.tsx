@@ -20,7 +20,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Heart,
-  Zap
+  Zap,
+  CloudUpload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -37,6 +38,7 @@ import {
 import { AdminLikeBoosterModal, type AdminBoosterTab } from '../AdminLikeBoosterModal';
 import { AdminVerifiedBadge } from '../AdminVerifiedBadge';
 import { ADMIN_EMAIL } from '../../lib/songLikeService';
+import { VanzCloudStudioModal } from '../VanzCloudStudioModal';
 
 const VANZ_LOGO = 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png';
 
@@ -91,16 +93,44 @@ function formatExactDate(timestamp: number): string {
 
 export const VanzUpdateView: React.FC = () => {
   const { user, isAdmin, signInWithGoogleAction, signInWithGuestProfile, isAuthLoading } = usePlayer();
+  const [isStudioOpen, setIsStudioOpen] = useState<boolean>(false);
 
   // Patch releases (Preserving user modifications)
   const releases: PatchRelease[] = [
+    {
+      id: '2.7.0 Beta',
+      version: 'v2.7.0 Beta Testing',
+      releaseDate: '28 September 2026',
+      title: 'Studio Cloudinary Vanz Team Music & Rilis Single "Langkah Akhir"',
+      tag: 'Major',
+      isLatest: true,
+      summary: 'Integrasi penuh penyimpanan cloud audio Cloudinary untuk Vanz Team Music: fitur upload lagu .mp3 dan cover sekaligus, perubahan nama file via API Key, serta peluncuran lagu eksklusif terbaru "Langkah Akhir" dengan audio lossless & Dolby Atmos.',
+      highlights: [
+        {
+          type: 'feature',
+          text: 'Rilis single terbaru "Langkah Akhir" dari Vanz Team Music dengan lirik tersinkronisasi dan streaming direct audio kualitas tinggi.'
+        },
+        {
+          type: 'feature',
+          text: 'Studio Cloudinary: Upload file mentah .mp3 dan gambar cover sekaligus ke Cloud a3qg7jhw dengan pengenalan otomatis slug ID lagu.'
+        },
+        {
+          type: 'feature',
+          text: 'Manajemen file Cloudinary: Mengubah nama file audio & gambar via API Key dan API Secret (Basic Auth).'
+        },
+        {
+          type: 'performance',
+          text: 'Audio direct streaming dengan Web Audio API Dolby Atmos & visualizer spectrum real-time.'
+        }
+      ]
+    },
     {
       id: '2.6.0 Beta',
       version: 'v2.6.0 Beta Testing',
       releaseDate: '21 September 2026',
       title: 'Sistem Akun Mandiri, Kustomisasi Profil & Isolasi Playlist',
       tag: 'Major',
-      isLatest: true,
+      isLatest: false,
       summary: 'Pembaruan besar sistem autentikasi dan manajemen perpustakaan musik: setiap akun kini memiliki riwayat putar, favorit, dan playlist terpisah yang tersinkronisasi ke cloud, disertai fitur kustomisasi foto profil dan nama pengguna.',
       highlights: [
         {
@@ -404,6 +434,34 @@ export const VanzUpdateView: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Vanz Team Music Cloud Studio Banner */}
+      <section className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-black/80 border border-purple-500/30 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30 shrink-0">
+            <CloudUpload className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-white">Vanz Team Music Studio</h2>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/30 font-mono">
+                Cloudinary a3qg7jhw
+              </span>
+            </div>
+            <p className="text-xs text-neutral-300">
+              Upload file .mp3 & cover gambar ke cloud, ganti nama file via API Key, dan dengarkan lagu eksklusif terbaru.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsStudioOpen(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all hover:scale-105 active:scale-95 shrink-0"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Buka Studio Musik</span>
+        </button>
+      </section>
 
       {/* Clean Timeline: Release History */}
       <section className="py-6 sm:py-8 space-y-8 sm:space-y-12">
@@ -1043,6 +1101,12 @@ export const VanzUpdateView: React.FC = () => {
         initialTab={boosterInitialTab}
         initialVoteItemId={boosterVoteId}
         initialReplyId={boosterReplyId}
+      />
+
+      {/* Vanz Team Music Cloud Studio Modal */}
+      <VanzCloudStudioModal
+        isOpen={isStudioOpen}
+        onClose={() => setIsStudioOpen(false)}
       />
     </motion.div>
   );

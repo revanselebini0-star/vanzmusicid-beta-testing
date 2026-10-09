@@ -8,6 +8,22 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
+    <script>
+      // Shield against sanitized cross-origin third-party script errors in iframe preview
+      window.addEventListener('error', function(e) {
+        if (e.message === 'Script error.' || !e.filename) {
+          e.preventDefault?.();
+          e.stopPropagation?.();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && (String(e.reason).includes('Script error') || String(e.reason).includes('MediaKey') || String(e.reason).includes('MusicKit'))) {
+          e.preventDefault?.();
+        }
+      });
+    </script>
+
     <!-- =========================
          BASIC SEO
     ========================== -->
@@ -175,7 +191,7 @@
   <body class="overflow-x-hidden antialiased select-none">
 
     <div id="root"></div>
- 
+
     <script
       type="module"
       src="/src/main.tsx"

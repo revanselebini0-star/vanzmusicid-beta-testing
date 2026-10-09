@@ -192,5 +192,68 @@ export const CURATED_OFFLINE_LYRICS: Record<string, { title: string; artist: str
       { time: 70.0, text: "Ternyata aku yang terlalu berharap lebih" },
       { time: 77.5, text: "Kau sudah bahagia, sementara aku terluka pedih" }
     ]
+  },
+
+  // Anggi Marito - Tak Segampang Itu
+  "tak segampang itu": {
+    title: "Tak Segampang Itu",
+    artist: "Anggi Marito",
+    lyrics: [
+      { time: 15.0, text: "Waktu demi waktu ku lewati sendiri" },
+      { time: 25.0, text: "Mencoba melupakan bayangan dirimu" },
+      { time: 36.0, text: "Tak segampang itu ku mencari pengganti dirimu" },
+      { time: 46.0, text: "Yang rela ku jaga sepanjang hidupku" },
+      { time: 58.0, text: "Mengapa kini semuanya harus berakhir?" },
+      { time: 69.0, text: "Bila cinta ini masih utuh untukmu" }
+    ]
+  },
+
+  // Nadhif Basalamah - bergema sampai selamanya
+  "bergema sampai selamanya": {
+    title: "bergema sampai selamanya",
+    artist: "Nadhif Basalamah",
+    lyrics: [
+      { time: 12.0, text: "Di hening malam ini ku mengingat tawamu" },
+      { time: 24.0, text: "Aku ingin jadi teman nyamanmu" },
+      { time: 36.0, text: "Tempat kau bersandar saat dunia lelah" },
+      { time: 48.0, text: "Biarkan rasa ini bergema sampai selamanya" },
+      { time: 60.0, text: "Menemani langkahmu di setiap waktu" }
+    ]
+  },
+
+  // Vanz Team Music - Langkah Akhir (Lagu Terbaru)
+  "langkah akhir": {
+    title: "Langkah Akhir",
+    artist: "Vanz Team Music",
+    lyrics: [
+      { time: 0, text: "🎵 Vanz Team Music - Langkah Akhir 🎵" },
+      { time: 8.0, text: "Kala malam mulai menyelimuti sepi..." },
+      { time: 22.0, text: "Kutatapi langit tanpa ada bintang lagi" },
+      { time: 38.0, text: "Setiap jejak kenangan yang telah kita lewati" },
+      { time: 54.0, text: "Kini tersimpan abadi di sudut sanubari" },
+      { time: 70.0, text: "Ini bukanlah akhir dari sebuah cerita" },
+      { time: 88.0, text: "Hanya jeda sejenak tuk kembali berkarya" },
+      { time: 104.0, text: "Melodi cinta Vanz Team terus bergema" },
+      { time: 122.0, text: "Di setiap detak jantung dan hembusan nafas kita" },
+      { time: 145.0, text: "Langkah akhir... awal keabadian nada" }
+    ]
+  },
+
+  // Vanz Team Music - Langkah Di Tanah Tua (Official Cloudinary)
+  "langkah di tanah tua": {
+    title: "Langkah Di Tanah Tua",
+    artist: "Vanz Team Music",
+    lyrics: [
+      { time: 0, text: "🎵 Vanz Team Music - Langkah Di Tanah Tua 🎵" },
+      { time: 8.0, text: "Kala malam mulai menyelimuti sepi..." },
+      { time: 22.0, text: "Kutatapi langit tanpa ada bintang lagi" },
+      { time: 38.0, text: "Setiap jejak kenangan yang telah kita lewati" },
+      { time: 54.0, text: "Melangkah di tanah tua yang abadi" },
+      { time: 70.0, text: "Ini bukanlah akhir dari sebuah cerita" },
+      { time: 88.0, text: "Hanya jeda sejenak tuk kembali berkarya" },
+      { time: 104.0, text: "Melodi cinta Vanz Team terus bergema" },
+      { time: 122.0, text: "Di setiap detak jantung dan hembusan nafas kita" },
+      { time: 145.0, text: "Langkah akhir... awal keabadian nada" }
+    ]
   }
 };
