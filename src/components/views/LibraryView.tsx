@@ -95,12 +95,44 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <div className="flex items-center gap-3">
             {!spotifyUser ? (
               <button
-                onClick={() => {
-                  const clientId = "f5f7be5ca6a844b18c1e2d171b0814fb";
+                onClick={async () => {
+                  const clientId = 'f5f7be5ca6a844b18c1e2d171b0814fb';
                   const redirectUri = window.location.origin + window.location.pathname;
-                  const scopes = "user-read-private user-read-email playlist-read-private playlist-read-collaborative";
-                  const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=token&show_dialog=true`;
-                  window.location.href = authUrl;
+                  const scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative';
+
+                  const generateRandomString = (length: number) => {
+                    let text = '';
+                    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                    for (let i = 0; i < length; i++) {
+                      text += possible.charAt(Math.floor(Math.random() * possible.length));
+                    }
+                    return text;
+                  };
+
+                  const generateCodeChallenge = async (codeVerifier: string) => {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(codeVerifier);
+                    const digest = await window.crypto.subtle.digest('SHA-256', data);
+                    return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(digest))))
+                      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                  };
+
+                  const codeVerifier = generateRandomString(64);
+                  const codeChallenge = await generateCodeChallenge(codeVerifier);
+                  window.localStorage.setItem('code_verifier', codeVerifier);
+                  window.localStorage.setItem('spotify_redirect_uri', redirectUri);
+
+                  const params = new URLSearchParams({
+                    client_id: clientId,
+                    response_type: 'code',
+                    redirect_uri: redirectUri,
+                    scope: scopes,
+                    code_challenge_method: 'S256',
+                    code_challenge: codeChallenge,
+                    show_dialog: 'true'
+                  });
+
+                  window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-[#1DB954] hover:bg-[#1aa34a] text-black shadow-lg shadow-[#1DB954]/30 transition-all active:scale-95 cursor-pointer"
               >

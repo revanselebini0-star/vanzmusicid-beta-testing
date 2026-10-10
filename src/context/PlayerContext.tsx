@@ -747,16 +747,57 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.removeItem('vanz_spotify_token');
   };
 
-  // Handle Spotify OAuth 2.0 redirect hash
+  // Handle Spotify OAuth 2.0 PKCE code exchange or hash redirect
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        localStorage.setItem('vanz_spotify_token', accessToken);
-        window.history.replaceState({}, document.title, window.location.pathname);
-        loginWithSpotifyAction(accessToken);
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+
+    if (code) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      const exchangeToken = async () => {
+        try {
+          const clientId = 'f5f7be5ca6a844b18c1e2d171b0814fb';
+          const codeVerifier = window.localStorage.getItem('code_verifier');
+          const redirectUri = window.localStorage.getItem('spotify_redirect_uri') || (window.location.origin + window.location.pathname);
+
+          const payload = {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              client_id: clientId,
+              grant_type: 'authorization_code',
+              code: code,
+              redirect_uri: redirectUri,
+              code_verifier: codeVerifier || '',
+            }),
+          };
+
+          const response = await fetch('https://accounts.spotify.com/api/token', payload);
+          const data = await response.json();
+          if (data.access_token) {
+            await loginWithSpotifyAction(data.access_token);
+          } else {
+            console.error("Spotify token exchange error:", data);
+            await loginWithSpotifyAction();
+          }
+        } catch (error) {
+          console.error("Gagal menukarkan token:", error);
+          await loginWithSpotifyAction();
+        }
+      };
+      exchangeToken();
+    } else {
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token=')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get('access_token');
+        if (accessToken) {
+          localStorage.setItem('vanz_spotify_token', accessToken);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          loginWithSpotifyAction(accessToken);
+        }
       }
     }
   }, []);
@@ -1910,6 +1951,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isSpotifyMode,
         setSpotifyMode,
         spotifyTrackId,
+        spotifyUser,
+        spotifyToken,
+        loginWithSpotifyAction,
+        logoutSpotifyAction,
 
         isAppleDrmActive,
         appleDrmStatus,
