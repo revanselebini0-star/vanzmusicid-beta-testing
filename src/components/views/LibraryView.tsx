@@ -97,7 +97,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 onClick={async () => {
                   const clientId = 'f5f7be5ca6a844b18c1e2d171b0814fb';
-                  const redirectUri = window.location.origin + window.location.pathname;
+                  const redirectUri = window.location.origin.includes('vercel.app') ? window.location.origin : (window.location.origin.includes('run.app') || window.location.origin.includes('localhost') ? 'https://vanzmusicid.vercel.app' : window.location.origin);
                   const scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative';
 
                   const generateRandomString = (length: number) => {

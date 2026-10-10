@@ -758,7 +758,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
           const clientId = 'f5f7be5ca6a844b18c1e2d171b0814fb';
           const codeVerifier = window.localStorage.getItem('code_verifier');
-          const redirectUri = window.localStorage.getItem('spotify_redirect_uri') || (window.location.origin + window.location.pathname);
+          const redirectUri = window.localStorage.getItem('spotify_redirect_uri') || (window.location.origin.includes('vercel.app') ? window.location.origin : (window.location.origin.includes('run.app') || window.location.origin.includes('localhost') ? 'https://vanzmusicid.vercel.app' : window.location.origin));
 
           const payload = {
             method: 'POST',
