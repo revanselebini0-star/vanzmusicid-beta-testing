@@ -187,8 +187,12 @@ export const MiniPlayer: React.FC = () => {
 
         {/* Track Info & Duration Pill */}
         <div 
-          onClick={() => setFullPlayerOpen(true)}
+          onClick={() => {
+            setLyricsOpen(false);
+            setFullPlayerOpen(true);
+          }}
           className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity min-w-0 flex-1 sm:flex-initial max-w-[170px] sm:max-w-xs md:max-w-sm"
+          title="Klik untuk membuka pemutar di sebelah kanan"
         >
           <img 
             src={displayTrack.thumbnail} 
