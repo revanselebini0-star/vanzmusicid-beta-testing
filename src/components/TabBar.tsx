@@ -15,14 +15,14 @@ export const TabBar: React.FC = () => {
 
   return (
     <nav 
-      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-t border-white/[0.12] shadow-[0_-4px_24px_rgba(0,0,0,0.5)] pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 px-2 overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-transparent backdrop-blur-xl border-t border-white/[0.08] pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 px-2 overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
         isBottomBarsVisible 
           ? 'translate-y-0 pointer-events-auto' 
           : 'translate-y-full pointer-events-none'
       }`}
     >
-      {/* Specular glass reflection layer */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.09] via-transparent to-transparent pointer-events-none" />
+      {/* Subtle transparent glass reflection layer */}
+      <div className="absolute inset-0 bg-transparent pointer-events-none" />
 
       <div className="flex items-center justify-around relative z-10">
         {tabs.map((tab) => {
@@ -35,7 +35,13 @@ export const TabBar: React.FC = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center gap-1 py-1 px-1.5 sm:px-2 rounded-xl transition-all relative ${
-                isActive ? 'text-[var(--theme-accent)]' : 'text-neutral-400 hover:text-white'
+                isCenterSearch
+                  ? isActive
+                    ? 'text-white'
+                    : 'text-neutral-400 hover:text-white'
+                  : isActive
+                    ? 'text-[var(--theme-accent)]'
+                    : 'text-neutral-400 hover:text-white'
               }`}
             >
               {tab.image ? (
@@ -52,12 +58,12 @@ export const TabBar: React.FC = () => {
                   />
                 </div>
               ) : isCenterSearch ? (
-                <div className={`p-1 rounded-xl transition-all ${
+                <div className={`transition-all ${
                   isActive 
-                    ? 'bg-[var(--theme-accent)] text-white shadow-sm shadow-[var(--theme-glow)]' 
-                    : 'bg-white/10 text-neutral-200 border border-white/10'
+                    ? 'text-white scale-110' 
+                    : 'text-neutral-400'
                 }`}>
-                  <Icon className="w-4.5 h-4.5" />
+                  <Icon className="w-5 h-5" />
                 </div>
               ) : (
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
