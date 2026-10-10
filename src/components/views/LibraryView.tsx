@@ -48,7 +48,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     logoutSpotifyAction
   } = usePlayer();
 
-  const [activeSubTab, setActiveSubTab] = useState<'favorites' | 'history'>('favorites');
+  const [activeSubTab, setActiveSubTab] = useState<'favorites' | 'playlists' | 'history'>('favorites');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   
   // Spotify Login Modal state
@@ -140,21 +140,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <span>Login dengan Akun Spotify</span>
               </button>
             ) : (
-              <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-[#1DB954]/10 border border-[#1DB954]/30">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#1DB954]/15 border border-[#1DB954]/30">
                 <img 
                   src={spotifyUser.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb203050d0cabe72e57c99ce44'} 
                   alt={spotifyUser.display_name} 
-                  className="w-7 h-7 rounded-full object-cover"
+                  className="w-6 h-6 rounded-full object-cover"
                 />
-                <div className="text-left">
-                  <p className="text-xs font-bold text-neutral-900 dark:text-white">
-                    {spotifyUser.display_name}
-                  </p>
-                  <p className="text-[10px] text-[#1DB954] font-semibold">Spotify Terhubung</p>
-                </div>
+                <span className="text-xs font-bold text-neutral-900 dark:text-white truncate max-w-[160px]">
+                  {spotifyUser.display_name}
+                </span>
                 <button
                   onClick={logoutSpotifyAction}
-                  className="ml-2 p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-rose-500 transition-colors"
+                  className="ml-1 p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-neutral-400 hover:text-rose-500 transition-colors"
                   title="Keluar Spotify"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -179,13 +176,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         )}
       </div>
 
-      {/* Sub tabs: Favorites / History */}
+      {/* Sub tabs: Favorites / Playlists / History */}
       <div className="space-y-6">
         <div className="flex items-center gap-2 border-b border-black/5 dark:border-white/10 pb-3">
           <button
-            onClick={() => setActiveSubTab('favorites')}
+            onClick={() => { setActiveSubTab('favorites'); setSelectedPlaylist(null); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${
-              activeSubTab === 'favorites'
+              activeSubTab === 'favorites' && !selectedPlaylist
                 ? 'bg-[#fa2d48] text-white shadow-md shadow-[#fa2d48]/25'
                 : 'bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300'
             }`}
@@ -195,9 +192,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('history')}
+            onClick={() => setActiveSubTab('playlists')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${
-              activeSubTab === 'history'
+              activeSubTab === 'playlists' || selectedPlaylist
+                ? 'bg-[#fa2d48] text-white shadow-md shadow-[#fa2d48]/25'
+                : 'bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300'
+            }`}
+          >
+            <ListMusic className="w-3.5 h-3.5" />
+            <span>Playlist ({playlists.length})</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveSubTab('history'); setSelectedPlaylist(null); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${
+              activeSubTab === 'history' && !selectedPlaylist
                 ? 'bg-[#fa2d48] text-white shadow-md shadow-[#fa2d48]/25'
                 : 'bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300'
             }`}
@@ -297,6 +306,199 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <p className="text-xs text-neutral-400 mt-1">
                     Klik ikon hati (♡) pada lagu manapun untuk menyimpannya di sini.
                   </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub Tab: Playlists */}
+          {activeSubTab === 'playlists' && !selectedPlaylist && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
+                    Playlist Kamu & Spotify
+                  </h2>
+                  <p className="text-xs text-neutral-400">{playlists.length} playlist tersimpan</p>
+                </div>
+
+                <button
+                  onClick={onCreatePlaylistClick}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-[#fa2d48] text-white shadow-md shadow-[#fa2d48]/25 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Buat Playlist</span>
+                </button>
+              </div>
+
+              {playlists.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {playlists.map((playlist) => {
+                    const cover = playlist.coverImage || playlist.tracks[0]?.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&q=80';
+                    return (
+                      <div
+                        key={playlist.id}
+                        onClick={() => setSelectedPlaylist(playlist)}
+                        className="p-4 rounded-3xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 transition-all group cursor-pointer flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="aspect-square w-full rounded-2xl overflow-hidden mb-3 relative shadow-md">
+                            <img
+                              src={cover}
+                              alt={playlist.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePlayAll(playlist.tracks);
+                                }}
+                                className="w-10 h-10 rounded-full bg-[#fa2d48] text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                                title="Putar"
+                              >
+                                <Play className="w-4 h-4 fill-current ml-0.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <h3 className="text-sm font-bold text-neutral-900 dark:text-white truncate">
+                            {playlist.name}
+                          </h3>
+                          <p className="text-xs text-neutral-400 mt-0.5 truncate">
+                            {playlist.tracks.length} lagu {playlist.description ? `• ${playlist.description}` : ''}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handlePlayAll(playlist.tracks)}
+                            className="text-xs font-bold text-[#fa2d48] hover:underline flex items-center gap-1"
+                          >
+                            <Play className="w-3 h-3 fill-current" /> Putar
+                          </button>
+                          <button
+                            onClick={() => deletePlaylistAction(playlist.id)}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title="Hapus Playlist"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-20 text-center">
+                  <ListMusic className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                    Belum ada playlist
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Hubungkan akun Spotify Anda atau buat playlist baru untuk mulai mendengarkan.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected Playlist Detail View */}
+          {selectedPlaylist && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <button
+                onClick={() => setSelectedPlaylist(null)}
+                className="flex items-center gap-2 text-xs font-bold text-neutral-400 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Kembali ke Playlist</span>
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-6 rounded-3xl bg-white/[0.03] border border-white/10">
+                <img
+                  src={selectedPlaylist.coverImage || selectedPlaylist.tracks[0]?.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&q=80'}
+                  alt={selectedPlaylist.name}
+                  className="w-32 h-32 rounded-2xl object-cover shadow-xl"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="space-y-2 flex-1">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-[#fa2d48] bg-[#fa2d48]/10 px-2.5 py-1 rounded-full">
+                    Playlist
+                  </span>
+                  <h2 className="text-2xl font-extrabold text-neutral-900 dark:text-white">
+                    {selectedPlaylist.name}
+                  </h2>
+                  <p className="text-xs text-neutral-400">
+                    {selectedPlaylist.description || 'Playlist kustom & sinkronisasi'} • {selectedPlaylist.tracks.length} lagu
+                  </p>
+
+                  {selectedPlaylist.tracks.length > 0 && (
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        onClick={() => handlePlayAll(selectedPlaylist.tracks)}
+                        className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-bold bg-[#fa2d48] text-white shadow-md shadow-[#fa2d48]/25 transition-all"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Putar Semua</span>
+                      </button>
+                      <button
+                        onClick={() => handlePlayAll(selectedPlaylist.tracks, true)}
+                        className="p-2.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 hover:bg-black/10"
+                        title="Acak"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedPlaylist.tracks.length > 0 ? (
+                <div className="space-y-1">
+                  {selectedPlaylist.tracks.map((track, idx) => (
+                    <div
+                      key={`pl-track-${track.id}-${idx}`}
+                      onClick={() => playTrack(track, selectedPlaylist.tracks)}
+                      className="flex items-center justify-between p-3 rounded-2xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                        <span className="text-xs font-bold text-neutral-400 w-5 text-center">{idx + 1}</span>
+                        <img
+                          src={track.thumbnail}
+                          alt={track.title}
+                          referrerPolicy="no-referrer"
+                          className="w-11 h-11 rounded-xl object-cover shadow-sm shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white truncate">
+                            {track.title}
+                          </p>
+                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="flex items-center gap-2"
+                      >
+                        <button
+                          onClick={() => removeSongFromPlaylistAction(selectedPlaylist.id, track.id)}
+                          className="p-2 rounded-full text-neutral-400 hover:text-rose-500 transition-colors"
+                          title="Hapus dari playlist"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-16 text-center">
+                  <Music className="w-10 h-10 text-neutral-400 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">Playlist ini masih kosong</p>
+                  <p className="text-xs text-neutral-400 mt-1">Tambahkan lagu ke playlist ini dari menu lagu manapun.</p>
                 </div>
               )}
             </div>
