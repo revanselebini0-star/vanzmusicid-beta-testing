@@ -21,3 +21,11 @@ export const AccountIcon: React.FC<{ className?: string }> = ({ className }) => 
     <path fill="currentColor" d="M12 2a5 5 0 1 0 0 10a5 5 0 1 0 0-10M4 22h16c.55 0 1-.45 1-1v-1c0-3.86-3.14-7-7-7h-4c-3.86 0-7 3.14-7 7v1c0 .55.45 1 1 1" />
   </svg>
 );
+
+export const PlaylistIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" className={className}>
+    <path d="M0 0h24v24H0z" fill="none" />
+    <path fill="currentColor" d="M6 2h12v2H6zm13 4H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2m-2.5 11.25c0 .96-.78 1.75-1.75 1.75S13 18.21 13 17.25s.78-1.75 1.75-1.75c.27 0 .52.07.75.18v-4.75l-5-.83v6.16c0 .96-.78 1.75-1.75 1.75S7 17.22 7 16.26s.78-1.75 1.75-1.75c.27 0 .52.07.75.18V9.51c0-.15.06-.29.18-.38s.26-.13.41-.11l6 1c.24.04.42.25.42.49v6.75Z" />
+  </svg>
+);
+

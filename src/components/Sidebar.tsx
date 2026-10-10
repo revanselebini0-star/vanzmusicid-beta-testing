@@ -8,7 +8,7 @@ import {
   User as UserIcon,
   Music2
 } from 'lucide-react';
-import { HomeIcon, AccountIcon } from './icons/CustomIcons';
+import { HomeIcon, AccountIcon, PlaylistIcon } from './icons/CustomIcons';
 import { AdminVerifiedBadge } from './AdminVerifiedBadge';
 import { ViewTab } from '../types';
 
@@ -28,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   const navItems: { id: ViewTab; label: string; icon?: any; image?: string }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
     { id: 'search', label: 'Cari', icon: Search },
+    { id: 'playlist', label: 'Playlist Kamu', icon: PlaylistIcon },
     { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { Playlist, Track } from '../../types';
+import { DEFAULT_SPOTIFY_TRACKS } from '../../lib/spotify';
 import { 
   Heart, 
   ListMusic, 
@@ -13,8 +14,13 @@ import {
   Database, 
   User as UserIcon,
   Sparkles,
-  ArrowLeft
+  ArrowLeft,
+  Music,
+  CheckCircle2,
+  ExternalLink,
+  LogOut
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface LibraryViewProps {
   onCreatePlaylistClick: () => void;
@@ -34,16 +40,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     removeSongFromPlaylistAction, 
     deletePlaylistAction,
     user,
-    signInWithGoogleAction
+    signInWithGoogleAction,
+    createPlaylist,
+    addSongToPlaylistAction,
+    spotifyUser,
+    loginWithSpotifyAction,
+    logoutSpotifyAction
   } = usePlayer();
 
   const [activeSubTab, setActiveSubTab] = useState<'favorites' | 'history'>('favorites');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
-
-  // Sync selectedPlaylist with updated playlists from context
-  const currentSelectedPlaylist = selectedPlaylist 
-    ? playlists.find(p => p.id === selectedPlaylist.id) || null
-    : null;
+  
+  // Spotify Login Modal state
+  const [isSpotifyModalOpen, setIsSpotifyModalOpen] = useState(false);
+  const [spotifyNameInput, setSpotifyNameInput] = useState('');
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const handlePlayAll = (tracks: Track[], shuffle = false) => {
     if (tracks.length === 0) return;
@@ -54,21 +66,69 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     playTrack(list[0], list);
   };
 
+  const handleSpotifyLoginSubmit = async () => {
+    setIsImporting(true);
+    setImportStatus(null);
+    try {
+      await loginWithSpotifyAction(spotifyNameInput);
+      setImportStatus('Berhasil login & menyinkronkan playlist Spotify akun Anda!');
+      setTimeout(() => {
+        setIsImporting(false);
+        setIsSpotifyModalOpen(false);
+        setImportStatus(null);
+        setSpotifyNameInput('');
+      }, 800);
+    } catch (err: any) {
+      setImportStatus('Gagal terhubung ke akun Spotify.');
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-32 animate-in fade-in duration-300">
-      {/* Header & User Profile / Login status */}
+      {/* Header & Spotify Login Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white mb-1">
+          <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white mb-2">
             Perpustakaan Saya
           </h1>
-          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-              <Database className="w-3.5 h-3.5" />
-              IndexedDB Aktif (Offline Ready)
-            </span>
-            <span>•</span>
-            <span>{favorites.length} Favorit</span>
+          <div className="flex items-center gap-3">
+            {!spotifyUser ? (
+              <button
+                onClick={() => {
+                  const clientId = "f5f7be5ca6a844b18c1e2d171b0814fb";
+                  const redirectUri = window.location.origin + window.location.pathname;
+                  const scopes = "user-read-private user-read-email playlist-read-private playlist-read-collaborative";
+                  const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=token&show_dialog=true`;
+                  window.location.href = authUrl;
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-[#1DB954] hover:bg-[#1aa34a] text-black shadow-lg shadow-[#1DB954]/30 transition-all active:scale-95 cursor-pointer"
+              >
+                <Music className="w-4 h-4 fill-current" />
+                <span>Login dengan Akun Spotify</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-[#1DB954]/10 border border-[#1DB954]/30">
+                <img 
+                  src={spotifyUser.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb203050d0cabe72e57c99ce44'} 
+                  alt={spotifyUser.display_name} 
+                  className="w-7 h-7 rounded-full object-cover"
+                />
+                <div className="text-left">
+                  <p className="text-xs font-bold text-neutral-900 dark:text-white">
+                    {spotifyUser.display_name}
+                  </p>
+                  <p className="text-[10px] text-[#1DB954] font-semibold">Spotify Terhubung</p>
+                </div>
+                <button
+                  onClick={logoutSpotifyAction}
+                  className="ml-2 p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-rose-500 transition-colors"
+                  title="Keluar Spotify"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -150,16 +210,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
               {favorites.length > 0 ? (
                 <div className="space-y-1">
-                  {favorites.map((track, idx) => (
+                  {favorites.map((track) => (
                     <div
                       key={track.id}
                       onClick={() => playTrack(track, favorites)}
                       className="flex items-center justify-between p-3 rounded-2xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                        <span className="w-5 text-center text-xs font-bold text-neutral-400">
-                          {(idx + 1).toString().padStart(2, '0')}
-                        </span>
                         <img
                           src={track.thumbnail}
                           alt={track.title}
@@ -232,9 +289,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       className="flex items-center justify-between p-3 rounded-2xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                        <span className="w-5 text-center text-xs font-bold text-neutral-400">
-                          {(idx + 1).toString().padStart(2, '0')}
-                        </span>
                         <img
                           src={track.thumbnail}
                           alt={track.title}
@@ -278,6 +332,79 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Spotify Login Modal */}
+      <AnimatePresence>
+        {isSpotifyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md p-6 rounded-3xl bg-neutral-900 border border-white/20 text-white space-y-5 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-[#1DB954] text-black flex items-center justify-center font-bold">
+                    <Music className="w-5 h-5 fill-current" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Login dengan Akun Spotify</h3>
+                    <p className="text-xs text-neutral-400">Sinkronkan playlist asli akun Spotify Anda</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsSpotifyModalOpen(false)}
+                  className="text-xs text-neutral-400 hover:text-white p-1.5"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {importStatus && (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{importStatus}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-neutral-300">Nama Akun / Akses Token Spotify</label>
+                <input
+                  type="text"
+                  value={spotifyNameInput}
+                  onChange={(e) => setSpotifyNameInput(e.target.value)}
+                  placeholder="Masukkan nama akun Spotify Anda (cth: Revan Spotify)"
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-[#1DB954]"
+                />
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2">
+                <p className="text-xs font-bold text-neutral-200">Sinkronisasi Otomatis:</p>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Setelah login, seluruh playlist dan lagu favorit dari akun Spotify Anda akan otomatis muncul di tab "Playlist Kamu" dan siap diputar seketika.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setIsSpotifyModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-bold transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleSpotifyLoginSubmit}
+                  disabled={isImporting}
+                  className="flex-1 py-2.5 rounded-xl bg-[#1DB954] hover:bg-[#1aa34a] text-black text-xs font-extrabold shadow-lg shadow-[#1DB954]/30 transition-all disabled:opacity-50"
+                >
+                  {isImporting ? 'Menghubungkan...' : 'Hubungkan & Masuk'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

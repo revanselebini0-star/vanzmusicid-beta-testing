@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { Search } from 'lucide-react';
-import { HomeIcon, AccountIcon } from './icons/CustomIcons';
+import { HomeIcon, AccountIcon, PlaylistIcon } from './icons/CustomIcons';
 import { ViewTab } from '../types';
 
 export const TabBar: React.FC = () => {
@@ -10,6 +10,7 @@ export const TabBar: React.FC = () => {
   const tabs: { id: ViewTab; label: string; icon?: any; image?: string }[] = [
     { id: 'listen_now', label: 'Beranda', icon: HomeIcon },
     { id: 'search', label: 'Cari', icon: Search },
+    { id: 'playlist', label: 'Playlist Kamu', icon: PlaylistIcon },
     { id: 'account', label: 'Akun', icon: AccountIcon },
   ];
 

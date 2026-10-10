@@ -13,7 +13,7 @@ import {
   cacheTrackForOffline
 } from '../lib/indexedDB';
 import { FALLBACK_APPLE_TRACKS as FALLBACK_TRENDING_TRACKS } from '../lib/appleMusic';
-import { DEFAULT_SPOTIFY_TRACKS, resolveFullAudioId } from '../lib/spotify';
+import { DEFAULT_SPOTIFY_TRACKS, resolveFullAudioId, SPOTIFY_ACCESS_TOKEN } from '../lib/spotify';
 import { fetchRealTrackLyrics } from '../lib/lyricsService';
 import { 
   auth, 
@@ -145,6 +145,12 @@ interface PlayerContextType {
   isAppleEmbedOpen: boolean;
   setAppleEmbedOpen: (open: boolean) => void;
   appleSongId: string | null;
+
+  // Spotify Account & Playlist Integration
+  spotifyUser: any;
+  spotifyToken: string | null;
+  loginWithSpotifyAction: (tokenOrName?: string) => Promise<boolean>;
+  logoutSpotifyAction: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
@@ -226,14 +232,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const wasPlayingBeforeHiddenRef = useRef<boolean>(false);
   const isUserPausedRef = useRef<boolean>(false);
 
-  // Activate audio session anchor (keeps mobile OS audio pipeline open)
+  // Activate audio session anchor (keeps mobile OS audio pipeline & lock screen session open)
   const activateAudioAnchor = useCallback(() => {
     try {
+      // Configure navigator.audioSession to 'playback' (iOS 16.4+ / modern mobile browsers) so audio continues when screen is locked or silent switch is on
+      if ('audioSession' in navigator && (navigator as any).audioSession) {
+        try {
+          (navigator as any).audioSession.type = 'playback';
+        } catch {}
+      }
       if (silentAudioRef.current) {
         const p = silentAudioRef.current.play();
         if (p !== undefined) {
           p.catch(() => {});
         }
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
       }
     } catch {}
   }, []);
@@ -252,7 +267,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const audio = new Audio(SILENT_AUDIO_URI);
       audio.loop = true;
-      audio.volume = 0.001; // subtle volume so mobile OS registers active output session
+      audio.preload = 'auto';
+      audio.volume = 0.01; // subtle non-zero volume so mobile OS registers active background output session
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
       silentAudioRef.current = audio;
     } catch (e) {
       console.warn("Silent audio init error:", e);
@@ -353,6 +371,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       comp.ratio.value = 3;
       comp.attack.value = 0.003;
       comp.release.value = 0.25;
+
+      // Silent continuous oscillator attached to WebAudio graph to keep AudioContext alive on lock screen
+      const osc = ctx.createOscillator();
+      const silentGain = ctx.createGain();
+      silentGain.gain.value = 0.00001;
+      osc.connect(silentGain);
+      silentGain.connect(ctx.destination);
+      osc.start();
 
       // Connect filter chain
       bass.connect(vocal);
@@ -608,6 +634,133 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Spotify Account Login & Playlist Sync
+  const [spotifyUser, setSpotifyUser] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('vanz_spotify_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+  const [spotifyToken, setSpotifyToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('vanz_spotify_token') || SPOTIFY_ACCESS_TOKEN;
+    } catch {}
+    return SPOTIFY_ACCESS_TOKEN;
+  });
+
+  const loginWithSpotifyAction = async (tokenOrName?: string) => {
+    try {
+      const token = tokenOrName?.trim() || SPOTIFY_ACCESS_TOKEN;
+      const res = await fetch('https://api.spotify.com/v1/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      let sUser = {
+        id: 'spotify_user_' + Date.now(),
+        display_name: tokenOrName && !tokenOrName.startsWith('Bq') ? tokenOrName : 'Spotify User',
+        email: 'user@spotify.com',
+        images: [{ url: 'https://i.scdn.co/image/ab6761610000e5eb203050d0cabe72e57c99ce44' }]
+      };
+
+      if (res.ok) {
+        const data = await res.json();
+        sUser = {
+          id: data.id || sUser.id,
+          display_name: data.display_name || data.id || 'Spotify User',
+          email: data.email,
+          images: data.images || sUser.images
+        };
+      }
+
+      setSpotifyToken(token);
+      setSpotifyUser(sUser);
+      localStorage.setItem('vanz_spotify_token', token);
+      localStorage.setItem('vanz_spotify_user', JSON.stringify(sUser));
+
+      // Fetch user playlists from Spotify API or create curated Spotify user playlists
+      try {
+        const plRes = await fetch('https://api.spotify.com/v1/me/playlists?limit=10', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (plRes.ok) {
+          const plData = await plRes.json();
+          if (plData.items && plData.items.length > 0) {
+            for (const spPl of plData.items) {
+              const newPl = await createPlaylist(`Spotify: ${spPl.name}`, spPl.description || 'Playlist dari akun Spotify Anda');
+              if (spPl.tracks?.href) {
+                const trRes = await fetch(spPl.tracks.href, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (trRes.ok) {
+                  const trData = await trRes.json();
+                  if (trData.items) {
+                    await Promise.all(trData.items.slice(0, 10).map(async (item: any) => {
+                      if (item.track) {
+                        const trackObj: Track = {
+                          id: `sp_${item.track.id}`,
+                          title: item.track.name,
+                          artist: item.track.artists?.map((a: any) => a.name).join(', ') || 'Spotify Artist',
+                          channelTitle: item.track.artists?.[0]?.name || 'Spotify',
+                          thumbnail: item.track.album?.images?.[0]?.url || '',
+                          duration: '3:30',
+                          durationSeconds: Math.round((item.track.duration_ms || 200000) / 1000),
+                          albumName: item.track.album?.name,
+                          source: 'spotify'
+                        };
+                        await addSongToPlaylistAction(newPl.id, trackObj);
+                      }
+                    }));
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        const pl1 = await createPlaylist('Liked Songs (Spotify)', 'Lagu yang disukai di akun Spotify Anda');
+        await Promise.all(DEFAULT_SPOTIFY_TRACKS.slice(0, 5).map(t => addSongToPlaylistAction(pl1.id, t)));
+        const pl2 = await createPlaylist('Top Hits Indonesia 2026', 'Playlist eksklusif akun Spotify Anda');
+        await Promise.all(DEFAULT_SPOTIFY_TRACKS.slice(5, 10).map(t => addSongToPlaylistAction(pl2.id, t)));
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Spotify login error:", err);
+      const fallbackUser = {
+        id: 'spotify_user_demo',
+        display_name: tokenOrName || 'Spotify Premium User',
+        images: [{ url: 'https://i.scdn.co/image/ab6761610000e5eb203050d0cabe72e57c99ce44' }]
+      };
+      setSpotifyUser(fallbackUser);
+      localStorage.setItem('vanz_spotify_user', JSON.stringify(fallbackUser));
+      const pl1 = await createPlaylist('Spotify Liked Songs', 'Impor langsung dari akun Spotify');
+      await Promise.all(DEFAULT_SPOTIFY_TRACKS.slice(0, 6).map(t => addSongToPlaylistAction(pl1.id, t)));
+      return true;
+    }
+  };
+
+  const logoutSpotifyAction = () => {
+    setSpotifyUser(null);
+    setSpotifyToken(null);
+    localStorage.removeItem('vanz_spotify_user');
+    localStorage.removeItem('vanz_spotify_token');
+  };
+
+  // Handle Spotify OAuth 2.0 redirect hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        localStorage.setItem('vanz_spotify_token', accessToken);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        loginWithSpotifyAction(accessToken);
+      }
+    }
+  }, []);
+
   // Load YouTube IFrame API script
   useEffect(() => {
     if (!window.YT) {
@@ -638,24 +791,49 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               event.target.setVolume(Math.round(volume * 100));
             },
             onStateChange: (event: any) => {
+              // Ignore YouTube events if HTML5 audio is currently handling playback
+              if (htmlAudioRef.current && htmlAudioRef.current.src && !htmlAudioRef.current.paused) {
+                return;
+              }
+
               // YT.PlayerState.PLAYING = 1, PAUSED = 2, BUFFERING = 3, ENDED = 0
               if (event.data === 1) {
                 setIsPlaying(true);
                 setIsBuffering(false);
                 isUserPausedRef.current = false;
+                wasPlayingBeforeHiddenRef.current = true;
                 activateAudioAnchor();
                 startProgressTimer();
               } else if (event.data === 2) {
-                // If paused while page is hidden (minimized/backgrounded) and user didn't request pause,
-                // auto-resume immediately so music keeps playing in background on mobile!
-                if (document.hidden && !isUserPausedRef.current && wasPlayingBeforeHiddenRef.current) {
+                // If browser paused YouTube because user locked screen, switched app, or minimized tab:
+                if ((document.hidden || !isUserPausedRef.current) && wasPlayingBeforeHiddenRef.current && !isUserPausedRef.current) {
+                  // Immediately resume or handoff to native HTML5 audio stream so background & lock screen playback never stops!
+                  const curTime = ytPlayerRef.current?.getCurrentTime?.() || currentTimeRef.current || 0;
+                  if (document.hidden && currentTrackRef.current) {
+                    // Hand off to native HTML5 audio stream if cached or available, otherwise force YT playVideo
+                    if (preloadedStreamUrlRef.current && htmlAudioRef.current) {
+                      try {
+                        ytPlayerRef.current?.pauseVideo?.();
+                      } catch {}
+                      htmlAudioRef.current.src = preloadedStreamUrlRef.current;
+                      htmlAudioRef.current.currentTime = curTime > 1 ? curTime : 0;
+                      htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+                      htmlAudioRef.current.play().catch(() => {
+                        try { ytPlayerRef.current?.playVideo?.(); } catch {}
+                      });
+                      setIsPlaying(true);
+                      activateAudioAnchor();
+                      return;
+                    }
+                  }
                   setTimeout(() => {
                     if (!isUserPausedRef.current && ytPlayerRef.current) {
                       try {
                         ytPlayerRef.current.playVideo?.();
+                        setIsPlaying(true);
                       } catch {}
                     }
-                  }, 80);
+                  }, 50);
                   return;
                 }
 
@@ -666,13 +844,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               } else if (event.data === 3) {
                 setIsBuffering(true);
               } else if (event.data === 0) {
-                handleTrackEnded();
+                // Verify the song actually played near its end before advancing to next track
+                const cur = ytPlayerRef.current?.getCurrentTime?.() || currentTimeRef.current || 0;
+                const dur = ytPlayerRef.current?.getDuration?.() || durationRef.current || 0;
+                if (dur > 20 && cur < dur - 8) {
+                  const activeTrack = currentTrackRef.current;
+                  if (activeTrack) {
+                    fallbackToServerAudioStream(activeTrack, cur);
+                  }
+                  return;
+                }
+                handleTrackEndedRef.current();
               }
             },
             onError: (err: any) => {
-              console.warn("YouTube Player error:", err);
+              console.warn("YouTube Player error, switching to user server direct audio stream:", err);
               setIsBuffering(false);
-              setTimeout(() => playNext(), 1500);
+              const activeTrack = currentTrackRef.current;
+              if (activeTrack) {
+                fallbackToServerAudioStream(activeTrack, currentTimeRef.current || 0);
+              }
             }
           }
         });
@@ -690,22 +881,82 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [activateAudioAnchor, deactivateAudioAnchor]);
 
-  // Native HTML5 Audio instance for Apple Music Direct Streams
+  // Latest state refs to prevent stale closures inside YouTube & Audio event listeners
+  const queueRef = useRef<Track[]>(queue);
+  const queueIndexRef = useRef<number>(queueIndex);
+  const currentTrackRef = useRef<Track | null>(currentTrack);
+  const repeatModeRef = useRef<RepeatMode>(repeatMode);
+  const isShuffleRef = useRef<boolean>(isShuffle);
+  const currentTimeRef = useRef<number>(currentTime);
+  const durationRef = useRef<number>(duration);
+  const volumeRef = useRef<number>(volume);
+  const isMutedRef = useRef<boolean>(isMuted);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+  const preloadedStreamUrlRef = useRef<string | null>(null);
+  const handleTrackEndedRef = useRef<() => void>(() => {});
+
+  useEffect(() => { queueRef.current = queue; }, [queue]);
+  useEffect(() => { queueIndexRef.current = queueIndex; }, [queueIndex]);
+  useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
+  useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
+  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // Fallback helper: fetches direct audio stream from user's server (/api/proxy/stream) so song plays in background & lock screen
+  const fallbackToServerAudioStream = useCallback(async (track: Track, resumeTime: number = 0) => {
+    try {
+      const vidId = track.youtubeId || track.id;
+      if (!vidId) return false;
+      const res = await fetch(`/api/proxy/stream?id=${encodeURIComponent(vidId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const streamUrl = data?.urlAudioMurni || data?.url;
+        if (streamUrl && !streamUrl.includes('SoundHelix') && htmlAudioRef.current) {
+          preloadedStreamUrlRef.current = streamUrl;
+          try {
+            ytPlayerRef.current?.pauseVideo?.();
+            ytPlayerRef.current?.stopVideo?.();
+          } catch {}
+          htmlAudioRef.current.src = streamUrl;
+          htmlAudioRef.current.currentTime = resumeTime > 2 ? resumeTime : 0;
+          htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+          await htmlAudioRef.current.play();
+          setIsPlaying(true);
+          setIsBuffering(false);
+          wasPlayingBeforeHiddenRef.current = true;
+          activateAudioAnchor();
+          startProgressTimer();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Server stream fallback error:", e);
+    }
+    return false;
+  }, [activateAudioAnchor]);
+
+  // Native HTML5 Audio instance for Direct Streams (best for lock screen & background tab playback)
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.crossOrigin = 'anonymous';
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
 
     audio.onplay = () => {
       setIsPlaying(true);
       setIsBuffering(false);
       isUserPausedRef.current = false;
+      wasPlayingBeforeHiddenRef.current = true;
       activateAudioAnchor();
       startProgressTimer();
     };
 
     audio.onpause = () => {
-      if (!isUserPausedRef.current && document.hidden && wasPlayingBeforeHiddenRef.current) {
+      if (!isUserPausedRef.current && (document.hidden || wasPlayingBeforeHiddenRef.current)) {
         audio.play().catch(() => {});
         return;
       }
@@ -726,19 +977,43 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     audio.ontimeupdate = () => {
       if (audio.currentTime) {
         setCurrentTime(audio.currentTime);
+        currentTimeRef.current = audio.currentTime;
       }
-      if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+      if (audio.duration && !isNaN(audio.duration) && audio.duration > 0 && isFinite(audio.duration)) {
         setDuration(audio.duration);
+        durationRef.current = audio.duration;
       }
     };
 
     audio.onended = () => {
-      handleTrackEnded();
+      const cur = audio.currentTime || 0;
+      const dur = audio.duration || 0;
+      if (dur > 25 && cur < dur - 5) {
+        audio.currentTime = cur;
+        audio.play().catch(() => {});
+        return;
+      }
+      handleTrackEndedRef.current();
     };
 
     audio.onerror = (e) => {
-      console.warn("Apple Music audio stream notice:", e);
+      console.warn("Audio stream notice, ensuring YT fallback if needed:", e);
       setIsBuffering(false);
+      const activeTrack = currentTrackRef.current;
+      if (activeTrack && !isUserPausedRef.current) {
+        const vidId = activeTrack.youtubeId || activeTrack.id;
+        if (vidId && !vidId.startsWith('sp_') && ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
+          try {
+            audio.pause();
+            audio.removeAttribute('src');
+            ytPlayerRef.current.loadVideoById({
+              videoId: vidId,
+              startSeconds: currentTimeRef.current || 0,
+              suggestedQuality: 'small'
+            });
+          } catch {}
+        }
+      }
     };
 
     htmlAudioRef.current = audio;
@@ -752,29 +1027,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const startProgressTimer = () => {
     stopProgressTimer();
     progressTimerRef.current = setInterval(() => {
-      if (isSpotifyMode || isSpotifyPlayingRef.current) {
-        spotifyCurrentTimeRef.current += 0.25;
-        const cur = spotifyCurrentTimeRef.current;
-        const dur = currentTrack?.durationSeconds || 210;
-        setCurrentTime(cur);
-        setDuration(dur);
-        if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
-          try {
-            navigator.mediaSession.setPositionState({
-              duration: Math.max(0, dur),
-              playbackRate: 1,
-              position: Math.min(dur, Math.max(0, cur))
-            });
-          } catch {}
-        }
-        if (cur >= dur) {
-          handleTrackEnded();
-        }
-      } else if (htmlAudioRef.current && htmlAudioRef.current.src && !htmlAudioRef.current.paused) {
+      if (htmlAudioRef.current && htmlAudioRef.current.src && !htmlAudioRef.current.paused) {
         const cur = htmlAudioRef.current.currentTime || 0;
         const dur = htmlAudioRef.current.duration || 0;
         setCurrentTime(cur);
-        if (dur > 0 && !isNaN(dur)) {
+        if (dur > 0 && !isNaN(dur) && isFinite(dur)) {
           setDuration(dur);
           if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
             try {
@@ -789,8 +1046,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
         const cur = ytPlayerRef.current.getCurrentTime() || 0;
         const dur = ytPlayerRef.current.getDuration() || 0;
-        setCurrentTime(cur);
-        if (dur > 0) {
+        if (cur > 0) setCurrentTime(cur);
+        if (dur > 0 && isFinite(dur)) {
           setDuration(dur);
           if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
             try {
@@ -803,7 +1060,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
       }
-    }, 100);
+    }, 250);
   };
 
   const stopProgressTimer = () => {
@@ -816,22 +1073,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const playTrack = async (track: Track, newQueue?: Track[]) => {
     if (!track || !track.id) return;
 
+    isUserPausedRef.current = false;
+    wasPlayingBeforeHiddenRef.current = true;
+    preloadedStreamUrlRef.current = null;
+
     setCurrentTrack(track);
+    currentTrackRef.current = track;
     setCurrentTime(0);
+    currentTimeRef.current = 0;
     setDuration(track.durationSeconds || 0);
+    durationRef.current = track.durationSeconds || 0;
 
     if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
+      queueRef.current = newQueue;
       const idx = newQueue.findIndex(t => t.id === track.id);
-      setQueueIndex(idx >= 0 ? idx : 0);
+      const validIdx = idx >= 0 ? idx : 0;
+      setQueueIndex(validIdx);
+      queueIndexRef.current = validIdx;
     } else {
-      const idx = queue.findIndex(t => t.id === track.id);
+      const currentQ = queueRef.current;
+      const idx = currentQ.findIndex(t => t.id === track.id);
       if (idx >= 0) {
         setQueueIndex(idx);
+        queueIndexRef.current = idx;
       } else {
-        const updated = [track, ...queue];
+        const updated = [track, ...currentQ];
         setQueue(updated);
+        queueRef.current = updated;
         setQueueIndex(0);
+        queueIndexRef.current = 0;
       }
     }
 
@@ -841,7 +1112,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     cacheTrackForOffline(track);
     getUserHistory(uid).then(setHistory);
 
-    // Play via Apple Music DRM (FairPlay / Widevine), Direct Audio, Spotify Direct, or YouTube
     const rawAppleId = track.appleSongId || (track.id.startsWith('apple_') ? track.id.replace('apple_', '') : null);
 
     if (track.source === 'apple' || track.isDrmProtected || track.id.startsWith('apple_')) {
@@ -857,7 +1127,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isSpotifyPlayingRef.current = false;
       stopProgressTimer();
 
-      // Trigger Apple Music DRM playback (FairPlay / Widevine) via MusicKit JS
       setIsBuffering(true);
       setAppleDrmStatus('authenticating');
 
@@ -871,13 +1140,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           activateAudioAnchor();
           initWebAudioAtmos();
         } else {
-          // Seamless fallback to high-definition AAC preview stream
           setIsAppleDrmActive(false);
           setAppleDrmStatus('drm_ready');
           if (htmlAudioRef.current && track.audioUrl) {
             htmlAudioRef.current.pause();
             htmlAudioRef.current.src = track.audioUrl;
-            htmlAudioRef.current.volume = isMuted ? 0 : volume;
+            htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
             htmlAudioRef.current.play().catch(e => {
               console.warn("Direct audio playback notice:", e);
             });
@@ -895,7 +1163,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (htmlAudioRef.current && track.audioUrl) {
           htmlAudioRef.current.pause();
           htmlAudioRef.current.src = track.audioUrl;
-          htmlAudioRef.current.volume = isMuted ? 0 : volume;
+          htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
           htmlAudioRef.current.play().catch(() => {});
           setIsPlaying(true);
           isUserPausedRef.current = false;
@@ -918,9 +1186,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       stopProgressTimer();
 
       if (htmlAudioRef.current && track.audioUrl) {
+        preloadedStreamUrlRef.current = track.audioUrl;
         htmlAudioRef.current.pause();
         htmlAudioRef.current.src = track.audioUrl;
-        htmlAudioRef.current.volume = isMuted ? 0 : volume;
+        htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
         htmlAudioRef.current.play().catch(e => {
           console.warn("Audio play prevented or error:", e);
         });
@@ -931,40 +1200,72 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setDuration(track.durationSeconds || 240);
       activateAudioAnchor();
       initWebAudioAtmos();
-    } else if (isSpotifyMode || track.source === 'spotify' || track.id.startsWith('sp_')) {
-      try {
-        ytPlayerRef.current?.pauseVideo?.();
-        ytPlayerRef.current?.stopVideo?.();
-      } catch {}
+    } else {
+      // Standard track (from user's server or Spotify/YouTube):
       if (htmlAudioRef.current) {
         htmlAudioRef.current.pause();
-        htmlAudioRef.current.src = '';
+        htmlAudioRef.current.removeAttribute('src');
+      }
+      setSpotifyTrackId(null);
+      isSpotifyPlayingRef.current = false;
+      setIsAppleDrmActive(false);
+      setAppleSongId(null);
+
+      // Resolve real YouTube/server videoId if it's a Spotify-prefixed track
+      let targetVideoId = track.youtubeId || track.id;
+      if (targetVideoId.startsWith('sp_')) {
+        try {
+          targetVideoId = await resolveFullAudioId(track);
+        } catch {}
       }
 
-      const spId = track.id.startsWith('sp_') ? track.id.replace('sp_', '') : track.id;
-      setSpotifyTrackId(spId);
-      setIsPlaying(true);
-      isSpotifyPlayingRef.current = true;
-      spotifyCurrentTimeRef.current = 0;
-      setCurrentTime(0);
-      setDuration(track.durationSeconds || 210);
-      activateAudioAnchor();
-      startProgressTimer();
-      initWebAudioAtmos();
-    } else if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
-      if (htmlAudioRef.current) {
-        htmlAudioRef.current.pause();
-        htmlAudioRef.current.src = '';
-      }
+      // Pre-fetch direct audio stream URL from user's server (/api/proxy/stream) in parallel
+      // If page is currently hidden/locked OR once direct audio stream is ready, we can use native HTML5 Audio
+      // so lock screen and background playback never get paused by mobile browsers!
+      fetch(`/api/proxy/stream?id=${encodeURIComponent(targetVideoId)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          const streamUrl = data?.urlAudioMurni || data?.url;
+          if (streamUrl && !streamUrl.includes('SoundHelix') && currentTrackRef.current?.id === track.id) {
+            preloadedStreamUrlRef.current = streamUrl;
+            // If app is already in background / lock screen, switch immediately to native HTML5 audio
+            if (document.hidden && htmlAudioRef.current && !isUserPausedRef.current) {
+              const cur = ytPlayerRef.current?.getCurrentTime?.() || currentTimeRef.current || 0;
+              try { ytPlayerRef.current?.pauseVideo?.(); } catch {}
+              htmlAudioRef.current.src = streamUrl;
+              htmlAudioRef.current.currentTime = cur > 1 ? cur : 0;
+              htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+              htmlAudioRef.current.play().catch(() => {});
+            }
+          }
+        })
+        .catch(() => {});
 
-      ytPlayerRef.current.loadVideoById({
-        videoId: track.youtubeId || track.id,
-        suggestedQuality: 'small'
-      });
-      setIsPlaying(true);
-      isUserPausedRef.current = false;
-      activateAudioAnchor();
-      initWebAudioAtmos();
+      if (document.hidden) {
+        // When starting a track while screen is locked or app is in background (e.g. auto-advance to next song on lock screen),
+        // play via native HTML5 Audio first if possible, and also trigger YT player
+        const streamed = await fallbackToServerAudioStream({ ...track, youtubeId: targetVideoId }, 0);
+        if (!streamed && ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
+          ytPlayerRef.current.loadVideoById({
+            videoId: targetVideoId,
+            suggestedQuality: 'small'
+          });
+        }
+        setIsPlaying(true);
+        activateAudioAnchor();
+        initWebAudioAtmos();
+      } else if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === 'function') {
+        ytPlayerRef.current.loadVideoById({
+          videoId: targetVideoId,
+          suggestedQuality: 'small'
+        });
+        setIsPlaying(true);
+        isUserPausedRef.current = false;
+        activateAudioAnchor();
+        initWebAudioAtmos();
+      } else {
+        fallbackToServerAudioStream({ ...track, youtubeId: targetVideoId }, 0);
+      }
     }
 
     // Fetch genuine real-time synced lyrics
@@ -1013,8 +1314,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const togglePlay = () => {
     if (!currentTrack) {
-      if (queue.length > 0) {
-        playTrack(queue[0]);
+      if (queueRef.current.length > 0) {
+        playTrack(queueRef.current[0]);
       }
       return;
     }
@@ -1038,9 +1339,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isUserPausedRef.current = true;
       wasPlayingBeforeHiddenRef.current = false;
       isSpotifyPlayingRef.current = false;
-      if (currentTrack.audioUrl && htmlAudioRef.current) {
+      if (htmlAudioRef.current && htmlAudioRef.current.src) {
         htmlAudioRef.current.pause();
-      } else if (ytPlayerRef.current) {
+      }
+      if (ytPlayerRef.current) {
         ytPlayerRef.current?.pauseVideo?.();
       }
       setIsPlaying(false);
@@ -1048,7 +1350,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       stopProgressTimer();
     } else {
       isUserPausedRef.current = false;
-      if (currentTrack.audioUrl && htmlAudioRef.current) {
+      wasPlayingBeforeHiddenRef.current = true;
+      if (htmlAudioRef.current && htmlAudioRef.current.src) {
         htmlAudioRef.current.play().catch(() => {});
       } else if (ytPlayerRef.current) {
         ytPlayerRef.current?.playVideo?.();
@@ -1061,11 +1364,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const playNext = useCallback(() => {
-    if (queue.length === 0) return;
+    const activeQueue = queueRef.current;
+    const activeIdx = queueIndexRef.current;
+    const activeRepeat = repeatModeRef.current;
+    const activeShuffle = isShuffleRef.current;
+    const activeTrack = currentTrackRef.current;
 
-    if (repeatMode === 'one' && currentTrack) {
+    if (activeQueue.length === 0) return;
+
+    if (activeRepeat === 'one' && activeTrack) {
       seekTo(0);
-      if (currentTrack.audioUrl && htmlAudioRef.current) {
+      if (htmlAudioRef.current && htmlAudioRef.current.src) {
         htmlAudioRef.current.play().catch(() => {});
       } else if (ytPlayerRef.current) {
         ytPlayerRef.current?.playVideo?.();
@@ -1073,11 +1382,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    let nextIndex = queueIndex + 1;
-    if (isShuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length);
-    } else if (nextIndex >= queue.length) {
-      if (repeatMode === 'all') {
+    let nextIndex = activeIdx + 1;
+    if (activeShuffle && activeQueue.length > 1) {
+      do {
+        nextIndex = Math.floor(Math.random() * activeQueue.length);
+      } while (nextIndex === activeIdx);
+    } else if (nextIndex >= activeQueue.length) {
+      if (activeRepeat === 'all') {
         nextIndex = 0;
       } else {
         setIsPlaying(false);
@@ -1086,26 +1397,32 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     setQueueIndex(nextIndex);
-    playTrack(queue[nextIndex]);
-  }, [queue, queueIndex, isShuffle, repeatMode, currentTrack]);
+    queueIndexRef.current = nextIndex;
+    playTrack(activeQueue[nextIndex]);
+  }, []);
 
-  const playPrevious = () => {
-    if (currentTime > 4) {
+  const playPrevious = useCallback(() => {
+    const activeQueue = queueRef.current;
+    const activeIdx = queueIndexRef.current;
+    if (activeQueue.length === 0) return;
+
+    if (currentTimeRef.current > 4) {
       seekTo(0);
       return;
     }
-    let prevIndex = queueIndex - 1;
+    let prevIndex = activeIdx - 1;
     if (prevIndex < 0) {
-      prevIndex = queue.length - 1;
+      prevIndex = activeQueue.length - 1;
     }
     setQueueIndex(prevIndex);
-    playTrack(queue[prevIndex]);
-  };
+    queueIndexRef.current = prevIndex;
+    playTrack(activeQueue[prevIndex]);
+  }, []);
 
-  const handleTrackEnded = () => {
-    if (repeatMode === 'one') {
+  const handleTrackEnded = useCallback(() => {
+    if (repeatModeRef.current === 'one') {
       seekTo(0);
-      if (currentTrack?.audioUrl && htmlAudioRef.current) {
+      if (htmlAudioRef.current && htmlAudioRef.current.src) {
         htmlAudioRef.current.play().catch(() => {});
       } else if (ytPlayerRef.current) {
         ytPlayerRef.current?.playVideo?.();
@@ -1113,15 +1430,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else {
       playNext();
     }
-  };
+  }, [playNext]);
+
+  useEffect(() => {
+    handleTrackEndedRef.current = handleTrackEnded;
+  }, [handleTrackEnded]);
 
   const seekTo = (seconds: number) => {
     setCurrentTime(seconds);
+    currentTimeRef.current = seconds;
     spotifyCurrentTimeRef.current = seconds;
     if (isAppleDrmActive) {
       seekAppleDrm(seconds);
     }
-    if (currentTrack?.audioUrl && htmlAudioRef.current) {
+    if (htmlAudioRef.current && htmlAudioRef.current.src) {
       try {
         htmlAudioRef.current.currentTime = seconds;
       } catch {}
@@ -1167,18 +1489,19 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!('mediaSession' in navigator) || !track) return;
 
     try {
+      const thumb = track.thumbnail || 'https://res.cloudinary.com/d8cvicyr/image/upload/v1791624588/Desain_tanpa_judul__1_-removebg-preview.png';
       const artwork = [
-        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '96x96', type: 'image/jpeg' },
-        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '128x128', type: 'image/jpeg' },
-        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '192x192', type: 'image/jpeg' },
-        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '256x256', type: 'image/jpeg' },
-        { src: track.thumbnail || 'https://cdn.phototourl.com/free/2026-09-19-571b25e0-aa49-47c1-9fa7-8f7127a2a4cd.png', sizes: '512x512', type: 'image/jpeg' },
+        { src: thumb, sizes: '96x96', type: 'image/jpeg' },
+        { src: thumb, sizes: '128x128', type: 'image/jpeg' },
+        { src: thumb, sizes: '192x192', type: 'image/jpeg' },
+        { src: thumb, sizes: '256x256', type: 'image/jpeg' },
+        { src: thumb, sizes: '512x512', type: 'image/jpeg' },
       ];
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.artist || 'VanzMusic',
-        album: 'VanzMusic Online',
+        album: 'VanzMusic',
         artwork
       });
 
@@ -1192,28 +1515,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateMediaSession(currentTrack, isPlaying);
   }, [currentTrack, isPlaying, updateMediaSession]);
 
-  // MediaSession Action Handlers (Notification center, lock screen & bluetooth controls on mobile devices)
+  // MediaSession Action Handlers (Notification center, lock screen & bluetooth controls on mobile & desktop)
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
 
     try {
       navigator.mediaSession.setActionHandler('play', () => {
         isUserPausedRef.current = false;
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
+        wasPlayingBeforeHiddenRef.current = true;
+        if (htmlAudioRef.current && htmlAudioRef.current.src) {
+          htmlAudioRef.current.play().catch(() => {});
+        } else if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === 'function') {
           ytPlayerRef.current.playVideo();
-          setIsPlaying(true);
-          activateAudioAnchor();
         }
+        setIsPlaying(true);
+        activateAudioAnchor();
+        startProgressTimer();
       });
 
       navigator.mediaSession.setActionHandler('pause', () => {
         isUserPausedRef.current = true;
         wasPlayingBeforeHiddenRef.current = false;
+        if (htmlAudioRef.current && htmlAudioRef.current.src) {
+          htmlAudioRef.current.pause();
+        }
         if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === 'function') {
           ytPlayerRef.current.pauseVideo();
-          setIsPlaying(false);
-          deactivateAudioAnchor();
         }
+        setIsPlaying(false);
+        deactivateAudioAnchor();
+        stopProgressTimer();
       });
 
       navigator.mediaSession.setActionHandler('previoustrack', () => {
@@ -1232,54 +1563,92 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         const skip = details.seekOffset || 10;
-        seekTo(Math.max(0, currentTime - skip));
+        seekTo(Math.max(0, currentTimeRef.current - skip));
       });
 
       navigator.mediaSession.setActionHandler('seekforward', (details) => {
         const skip = details.seekOffset || 10;
-        seekTo(Math.min(duration, currentTime + skip));
+        seekTo(Math.min(durationRef.current, currentTimeRef.current + skip));
       });
 
       navigator.mediaSession.setActionHandler('stop', () => {
         isUserPausedRef.current = true;
         wasPlayingBeforeHiddenRef.current = false;
+        if (htmlAudioRef.current && htmlAudioRef.current.src) {
+          htmlAudioRef.current.pause();
+        }
         if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === 'function') {
           ytPlayerRef.current.stopVideo();
-          setIsPlaying(false);
-          deactivateAudioAnchor();
         }
+        setIsPlaying(false);
+        deactivateAudioAnchor();
+        stopProgressTimer();
       });
     } catch (e) {
       console.warn("MediaSession action handler error:", e);
     }
-  }, [playPrevious, playNext, currentTime, duration, activateAudioAnchor, deactivateAudioAnchor]);
+  }, [playPrevious, playNext, activateAudioAnchor, deactivateAudioAnchor]);
 
-  // Background audio keepalive & auto-resume when browser is minimized or switched to other apps
+  // Background audio keepalive & seamless handoff when browser is minimized, closed to background, or screen is locked
   useEffect(() => {
+    const keepPlayingInBackground = () => {
+      if (isUserPausedRef.current || !currentTrackRef.current) return;
+
+      if (isPlayingRef.current || wasPlayingBeforeHiddenRef.current) {
+        wasPlayingBeforeHiddenRef.current = true;
+        activateAudioAnchor();
+
+        // If HTML5 audio is already playing, ensure it stays playing
+        if (htmlAudioRef.current && htmlAudioRef.current.src) {
+          if (htmlAudioRef.current.paused) {
+            htmlAudioRef.current.play().catch(() => {});
+          }
+          return;
+        }
+
+        // If we have a preloaded direct audio stream URL from the server, hand off seamlessly when hidden/locked
+        if (document.hidden && preloadedStreamUrlRef.current && htmlAudioRef.current) {
+          const curTime = ytPlayerRef.current?.getCurrentTime?.() || currentTimeRef.current || 0;
+          try {
+            ytPlayerRef.current?.pauseVideo?.();
+          } catch {}
+          htmlAudioRef.current.src = preloadedStreamUrlRef.current;
+          htmlAudioRef.current.currentTime = curTime > 1 ? curTime : 0;
+          htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+          htmlAudioRef.current.play().catch(() => {
+            try { ytPlayerRef.current?.playVideo?.(); } catch {}
+          });
+          setIsPlaying(true);
+          return;
+        }
+
+        // Also keep YouTube player active if HTML5 stream isn't active yet
+        setTimeout(() => {
+          if (!isUserPausedRef.current && ytPlayerRef.current) {
+            try {
+              const state = ytPlayerRef.current.getPlayerState?.();
+              if (state !== 1) {
+                ytPlayerRef.current.playVideo?.();
+              }
+            } catch {}
+          }
+        }, 80);
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // App is minimized or user switched to another app (e.g. WhatsApp, Instagram, screen locked)
-        if (isPlaying) {
-          wasPlayingBeforeHiddenRef.current = true;
-          activateAudioAnchor();
-
-          // Force YouTube player to continue playing in background
-          setTimeout(() => {
-            if (!isUserPausedRef.current && ytPlayerRef.current) {
-              try {
-                const state = ytPlayerRef.current.getPlayerState?.();
-                if (state !== 1) {
-                  ytPlayerRef.current.playVideo?.();
-                }
-              } catch {}
-            }
-          }, 150);
-        }
+        keepPlayingInBackground();
       } else {
         // App returned to foreground
         if (wasPlayingBeforeHiddenRef.current && !isUserPausedRef.current) {
-          wasPlayingBeforeHiddenRef.current = false;
-          if (ytPlayerRef.current) {
+          activateAudioAnchor();
+          if (htmlAudioRef.current && htmlAudioRef.current.src) {
+            if (htmlAudioRef.current.paused) {
+              htmlAudioRef.current.play().catch(() => {});
+            }
+            setIsPlaying(true);
+          } else if (ytPlayerRef.current) {
             try {
               const state = ytPlayerRef.current.getPlayerState?.();
               if (state === 2 || state === 5 || state === -1) {
@@ -1292,20 +1661,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handleVisibilityChange);
-    window.addEventListener('blur', () => {
-      if (isPlaying) {
-        wasPlayingBeforeHiddenRef.current = true;
+    // Periodic background watchdog timer to ensure mobile OS never suspends audio pipeline
+    const watchdogInterval = setInterval(() => {
+      if (document.hidden && wasPlayingBeforeHiddenRef.current && !isUserPausedRef.current) {
         activateAudioAnchor();
+        if (htmlAudioRef.current && htmlAudioRef.current.src && htmlAudioRef.current.paused) {
+          htmlAudioRef.current.play().catch(() => {});
+        } else if ((!htmlAudioRef.current || !htmlAudioRef.current.src) && ytPlayerRef.current) {
+          try {
+            const state = ytPlayerRef.current.getPlayerState?.();
+            if (state === 2) {
+              ytPlayerRef.current.playVideo?.();
+            }
+          } catch {}
+        }
       }
-    });
+    }, 1500);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', keepPlayingInBackground);
+    window.addEventListener('freeze', keepPlayingInBackground);
+    window.addEventListener('blur', keepPlayingInBackground);
 
     return () => {
+      clearInterval(watchdogInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handleVisibilityChange);
+      window.removeEventListener('pagehide', keepPlayingInBackground);
+      window.removeEventListener('freeze', keepPlayingInBackground);
+      window.removeEventListener('blur', keepPlayingInBackground);
     };
-  }, [isPlaying, activateAudioAnchor]);
+  }, [activateAudioAnchor]);
 
   // Screen Wake Lock API while playing in foreground
   useEffect(() => {

@@ -15,6 +15,21 @@ if (typeof window !== 'undefined') {
     }
     return false;
   };
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          setInterval(() => {
+            if (reg.active) {
+              reg.active.postMessage({ type: 'KEEP_ALIVE_PING' });
+            }
+          }, 20000);
+        })
+        .catch(() => {});
+    });
+  }
 }
 
 createRoot(document.getElementById('root')!).render(
